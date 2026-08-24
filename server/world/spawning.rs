@@ -291,10 +291,7 @@ impl World {
                                 continue;
                             }
                         };
-                    let etype: String = match data
-                        .remove("etype")
-                        .map(serde_json::from_value)
-                    {
+                    let etype: String = match data.remove("etype").map(serde_json::from_value) {
                         Some(Ok(etype)) => etype,
                         _ => {
                             quarantine_entity_file(
@@ -305,20 +302,18 @@ impl World {
                             continue;
                         }
                     };
-                    let mut metadata: MetadataComp = match data
-                        .remove("metadata")
-                        .map(serde_json::from_value)
-                    {
-                        Some(Ok(metadata)) => metadata,
-                        _ => {
-                            quarantine_entity_file(
-                                &folder,
-                                &path,
-                                "missing or malformed \"metadata\" field",
-                            );
-                            continue;
-                        }
-                    };
+                    let mut metadata: MetadataComp =
+                        match data.remove("metadata").map(serde_json::from_value) {
+                            Some(Ok(metadata)) => metadata,
+                            _ => {
+                                quarantine_entity_file(
+                                    &folder,
+                                    &path,
+                                    "missing or malformed \"metadata\" field",
+                                );
+                                continue;
+                            }
+                        };
 
                     if etype.starts_with("block::") {
                         if let Some(Value::String(json_str)) = metadata.map.get("json") {
@@ -384,11 +379,7 @@ impl World {
 /// binary cannot parse may be one the next binary (or a human) can — the
 /// silent-delete version of this path once wiped an entire world's
 /// persisted entities over one missing serde default.
-fn quarantine_entity_file(
-    entities_folder: &std::path::Path,
-    path: &std::path::Path,
-    reason: &str,
-) {
+fn quarantine_entity_file(entities_folder: &std::path::Path, path: &std::path::Path, reason: &str) {
     let quarantine_folder = entities_folder
         .parent()
         .map(|parent| parent.join("entities-quarantine"))

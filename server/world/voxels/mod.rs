@@ -8,10 +8,10 @@ mod space;
 mod waterlogging;
 
 pub use access::VoxelAccess;
-pub use waterlogging::WaterloggingRules;
 pub use background_chunk_saver::*;
 pub use block::*;
 pub use chunk::*;
 pub use chunks::Chunks;
 pub use fluids::*;
 pub use space::*;
+pub use waterlogging::WaterloggingRules;

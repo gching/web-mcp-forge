@@ -161,7 +161,11 @@ fn a_client_rerequest_revives_a_parked_chunk_despite_recorded_interest() {
         let parked = Vec2(1, 1);
         assert!(
             matches!(
-                world.chunks().raw(&parked).expect("ring member missing").status,
+                world
+                    .chunks()
+                    .raw(&parked)
+                    .expect("ring member missing")
+                    .status,
                 ChunkStatus::Meshing
             ),
             "ring member {parked:?} should be parked in Meshing"

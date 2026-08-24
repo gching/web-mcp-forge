@@ -118,12 +118,7 @@ impl PieceBuilder {
         self
     }
 
-    pub fn fill(
-        mut self,
-        from: (u16, u16, u16),
-        to: (u16, u16, u16),
-        block: &'static str,
-    ) -> Self {
+    pub fn fill(mut self, from: (u16, u16, u16), to: (u16, u16, u16), block: &'static str) -> Self {
         let index = self.palette_index(block);
         for x in from.0..=to.0 {
             for y in from.1..=to.1 {
@@ -169,7 +164,13 @@ impl PieceBuilder {
         self
     }
 
-    pub fn socket(mut self, key: &'static str, at: (u16, u16, u16), facing: Dir4, accepts: &'static str) -> Self {
+    pub fn socket(
+        mut self,
+        key: &'static str,
+        at: (u16, u16, u16),
+        facing: Dir4,
+        accepts: &'static str,
+    ) -> Self {
         self.sockets.push(Socket {
             key,
             at,
@@ -205,7 +206,9 @@ pub struct Pool {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum StructureSource {
-    Single { piece: &'static str },
+    Single {
+        piece: &'static str,
+    },
     Pooled {
         start_pool: &'static str,
         max_depth: u8,
@@ -222,7 +225,11 @@ pub struct StructureMember {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum PlacementPolicy {
-    CellSites { cell: f64, chance: f64, jitter: f64 },
+    CellSites {
+        cell: f64,
+        chance: f64,
+        jitter: f64,
+    },
     RandomSpread {
         spacing_chunks: u16,
         separation_chunks: u16,
@@ -593,10 +600,19 @@ impl CompiledStructures {
 
     /// Candidate anchor for a site, before constraints; `None` when the
     /// site rolls empty (which is absence, not rejection).
-    pub fn candidate_anchor(&self, set: usize, site: (i64, i64), view: &dyn TerrainView) -> Option<(i32, i32, i32)> {
+    pub fn candidate_anchor(
+        &self,
+        set: usize,
+        site: (i64, i64),
+        view: &dyn TerrainView,
+    ) -> Option<(i32, i32, i32)> {
         let mut stream = self.site_stream(set, site, Self::LANE_PLACEMENT);
         let (x, z) = match &self.sets[set].spec.placement {
-            PlacementPolicy::CellSites { cell, chance, jitter } => {
+            PlacementPolicy::CellSites {
+                cell,
+                chance,
+                jitter,
+            } => {
                 if stream.unit() > *chance {
                     return None;
                 }
@@ -656,7 +672,10 @@ impl CompiledStructures {
                         return Err(RejectionReason::MinDistFromOrigin);
                     }
                 }
-                PlacementConstraint::ExcludeNear { set: other, min_dist } => {
+                PlacementConstraint::ExcludeNear {
+                    set: other,
+                    min_dist,
+                } => {
                     let other_index = self.set_index[other];
                     let sites = self.sites_near(other_index, (x, z), *min_dist);
                     for site in sites {
@@ -669,12 +688,10 @@ impl CompiledStructures {
                         }
                     }
                 }
-                PlacementConstraint::RequiresFluidFloor { min_depth } => {
-                    match view.sea_level() {
-                        Some(sea) if sea - y >= *min_depth => {}
-                        _ => return Err(RejectionReason::RequiresFluidFloor),
-                    }
-                }
+                PlacementConstraint::RequiresFluidFloor { min_depth } => match view.sea_level() {
+                    Some(sea) if sea - y >= *min_depth => {}
+                    _ => return Err(RejectionReason::RequiresFluidFloor),
+                },
             }
         }
         Ok(())
@@ -714,7 +731,12 @@ impl CompiledStructures {
         site: (i64, i64),
         view: &dyn TerrainView,
     ) -> Option<Arc<StructurePlan>> {
-        if let Some(cached) = self.plan_cache.read().expect("plan cache").get(&(set, site.0, site.1)) {
+        if let Some(cached) = self
+            .plan_cache
+            .read()
+            .expect("plan cache")
+            .get(&(set, site.0, site.1))
+        {
             return cached.clone();
         }
         let plan = self.build_plan(set, site, view);
@@ -883,8 +905,12 @@ impl CompiledStructures {
                 if fuel <= 0 {
                     break;
                 }
-                let socket_local =
-                    parent_piece.rotate_cell(socket.at.0, socket.at.1, socket.at.2, parent.rotation);
+                let socket_local = parent_piece.rotate_cell(
+                    socket.at.0,
+                    socket.at.1,
+                    socket.at.2,
+                    parent.rotation,
+                );
                 let world_socket = (
                     parent.min.0 + socket_local.0,
                     parent.min.1 + socket_local.1,
@@ -892,7 +918,11 @@ impl CompiledStructures {
                 );
                 let facing = socket.facing.rotated(parent.rotation);
                 let step = facing.step();
-                let target = (world_socket.0 + step.0, world_socket.1, world_socket.2 + step.1);
+                let target = (
+                    world_socket.0 + step.0,
+                    world_socket.1,
+                    world_socket.2 + step.1,
+                );
 
                 let is_terminal = depth + 1 >= max_depth;
                 let pool_slot = self.pool_index[socket.accepts];
@@ -970,11 +1000,7 @@ impl CompiledStructures {
     pub fn sites_in_reach(&self, set: usize, min: (i32, i32), max: (i32, i32)) -> Vec<(i64, i64)> {
         let reach = self.sets[set].spec.max_reach;
         let pad = reach.0.max(reach.2) as i32 + 1;
-        self.sites_covering(
-            set,
-            (min.0 - pad, min.1 - pad),
-            (max.0 + pad, max.1 + pad),
-        )
+        self.sites_covering(set, (min.0 - pad, min.1 - pad), (max.0 + pad, max.1 + pad))
     }
 
     fn sites_covering(&self, set: usize, min: (i32, i32), max: (i32, i32)) -> Vec<(i64, i64)> {
@@ -1088,7 +1114,10 @@ impl CompiledStructures {
     }
 
     pub fn rejection_stats(&self, set: usize) -> RejectionStats {
-        self.rejections[set].lock().expect("rejection stats").clone()
+        self.rejections[set]
+            .lock()
+            .expect("rejection stats")
+            .clone()
     }
 
     pub fn locate(

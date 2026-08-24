@@ -662,14 +662,18 @@ pub(super) fn process_face<S: VoxelAccess>(
         light = LightUtils::insert_blue_light(light, blue_light);
         light = LightUtils::insert_sunlight(light, sunlight);
         let fluid_bit = if is_fluid { FLUID_BIT } else { 0 };
-        let fluid_surface_above = is_fluid
-            && has_fluid_above(vx, vy, vz, voxel_id, block.is_waterlogging_fluid, space);
+        let fluid_surface_above =
+            is_fluid && has_fluid_above(vx, vy, vz, voxel_id, block.is_waterlogging_fluid, space);
         let wave_bit = if is_fluid && dy == 1 && !fluid_surface_above {
             WAVE_BIT
         } else {
             0
         };
-        let water_exposed_bit = if is_water_exposed { WATER_EXPOSED_BIT } else { 0 };
+        let water_exposed_bit = if is_water_exposed {
+            WATER_EXPOSED_BIT
+        } else {
+            0
+        };
         lights.push(
             light as i32
                 | ao_or_emissive_bits(ao, face.emissive)

@@ -28,16 +28,30 @@ pub struct SurfaceRule {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum SurfaceCond {
-    DepthBelowTop { min: u16, max: u16 },
-    YRange { min: i32, max: i32 },
+    DepthBelowTop {
+        min: u16,
+        max: u16,
+    },
+    YRange {
+        min: i32,
+        max: i32,
+    },
     IsUnderFluid,
     IsAboveFluid,
     /// Column steepness at or above `min` blocks-per-block.
-    Steepness { min: f64 },
+    Steepness {
+        min: f64,
+    },
     /// Column steepness strictly below `max`; combined with `Steepness`
     /// this windows a band — scree between meadow and cliff face.
-    SteepnessBelow { max: f64 },
-    FieldWindow { field: &'static str, low: f64, high: f64 },
+    SteepnessBelow {
+        max: f64,
+    },
+    FieldWindow {
+        field: &'static str,
+        low: f64,
+        high: f64,
+    },
 }
 
 pub(crate) struct CompiledSurface {
@@ -100,14 +114,20 @@ impl CompiledSurface {
         let mut max_depth: u16 = 1;
         for (key, table) in &spec.tables {
             if table_keys.contains(key) {
-                return Err(GenError::DuplicateSurfaceTable { key: key.to_string() });
+                return Err(GenError::DuplicateSurfaceTable {
+                    key: key.to_string(),
+                });
             }
             if table.rules.is_empty() {
-                return Err(GenError::SurfaceTableNotExhaustive { key: key.to_string() });
+                return Err(GenError::SurfaceTableNotExhaustive {
+                    key: key.to_string(),
+                });
             }
             let last = table.rules.last().expect("nonempty");
             if !last.when.is_empty() {
-                return Err(GenError::SurfaceTableNotExhaustive { key: key.to_string() });
+                return Err(GenError::SurfaceTableNotExhaustive {
+                    key: key.to_string(),
+                });
             }
             let mut rules = Vec::new();
             for rule in &table.rules {
@@ -123,9 +143,15 @@ impl CompiledSurface {
                                 });
                             }
                             max_depth = max_depth.max(max + 1);
-                            CompiledCond::Depth { min: *min, max: *max }
+                            CompiledCond::Depth {
+                                min: *min,
+                                max: *max,
+                            }
                         }
-                        SurfaceCond::YRange { min, max } => CompiledCond::YRange { min: *min, max: *max },
+                        SurfaceCond::YRange { min, max } => CompiledCond::YRange {
+                            min: *min,
+                            max: *max,
+                        },
                         SurfaceCond::IsUnderFluid => CompiledCond::IsUnderFluid,
                         SurfaceCond::IsAboveFluid => CompiledCond::IsAboveFluid,
                         SurfaceCond::Steepness { min } => CompiledCond::Steepness { min: *min },
@@ -133,11 +159,12 @@ impl CompiledSurface {
                             CompiledCond::SteepnessBelow { max: *max }
                         }
                         SurfaceCond::FieldWindow { field, low, high } => {
-                            let index = patch_keys.iter().position(|k| k == field).ok_or_else(|| {
-                                GenError::UnknownPatchField {
-                                    field: field.to_string(),
-                                }
-                            })?;
+                            let index =
+                                patch_keys.iter().position(|k| k == field).ok_or_else(|| {
+                                    GenError::UnknownPatchField {
+                                        field: field.to_string(),
+                                    }
+                                })?;
                             CompiledCond::FieldWindow {
                                 field: index,
                                 low: *low,

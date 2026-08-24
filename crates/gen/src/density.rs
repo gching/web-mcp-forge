@@ -132,11 +132,7 @@ struct CompiledNotch {
 }
 
 impl CompiledDensity {
-    pub fn compile(
-        spec: &DensitySpec,
-        world_seed: u32,
-        dimension: &str,
-    ) -> Result<Self, String> {
+    pub fn compile(spec: &DensitySpec, world_seed: u32, dimension: &str) -> Result<Self, String> {
         if spec.band < 4.0 {
             return Err("density.band must be >= 4 blocks".to_string());
         }
@@ -286,9 +282,7 @@ impl CompiledDensity {
                     let down = 1.0 - smoothstep(1.0 - t, 1.0, phase);
                     -((up.min(down)) * 2.0 - 1.0)
                 };
-                let lens = shelf
-                    .lens
-                    .sample3(fx, fy * shelf.lens_squash, fz);
+                let lens = shelf.lens.sample3(fx, fy * shelf.lens_squash, fz);
                 let strength = (0.55 + 0.45 * lens).max(0.0);
                 delta += bias * shelf.relief * strength * column.shelf_gate;
             }

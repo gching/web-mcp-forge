@@ -1,8 +1,4 @@
-
-use voxelize_core::{
-    BlockRotation, BlockUtils,
-    LightColor, LightUtils, VoxelAccess,
-};
+use voxelize_core::{BlockRotation, BlockUtils, LightColor, LightUtils, VoxelAccess};
 
 use super::*;
 
@@ -13,7 +9,11 @@ pub(super) struct VoxelSpace<'a> {
 }
 
 impl<'a> VoxelSpace<'a> {
-    pub(super) fn new(chunks: &'a [Option<ChunkData>], chunk_size: i32, center_coords: [i32; 2]) -> Self {
+    pub(super) fn new(
+        chunks: &'a [Option<ChunkData>],
+        chunk_size: i32,
+        center_coords: [i32; 2],
+    ) -> Self {
         Self {
             chunks,
             chunk_size,

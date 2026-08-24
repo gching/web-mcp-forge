@@ -112,7 +112,14 @@ impl CompiledHydrology {
     /// Material for a voxel some stage decided is not solid. `roof_depth`
     /// is solid rock above the voxel in this column (already known by the
     /// carve pass); `surface` is the column's terrain height.
-    pub fn void_material(&self, x: i32, y: i32, z: i32, surface: i32, roof_depth: i32) -> VoidMaterial {
+    pub fn void_material(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+        surface: i32,
+        roof_depth: i32,
+    ) -> VoidMaterial {
         if let Some((lava_level, lava)) = self.lava {
             if y <= lava_level {
                 return VoidMaterial::Fluid(lava);

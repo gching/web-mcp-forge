@@ -48,17 +48,30 @@ fn density_chunks_are_order_and_thread_independent() {
         .collect();
     let forward: Vec<((i32, i32), u64)> = coords
         .iter()
-        .map(|&(cx, cz)| ((cx, cz), harness.chunk_digest(&harness.generate_chunk(cx, cz))))
+        .map(|&(cx, cz)| {
+            (
+                (cx, cz),
+                harness.chunk_digest(&harness.generate_chunk(cx, cz)),
+            )
+        })
         .collect();
     coords.reverse();
     let mut reverse: Vec<((i32, i32), u64)> = coords
         .par_iter()
-        .map(|&(cx, cz)| ((cx, cz), harness.chunk_digest(&harness.generate_chunk(cx, cz))))
+        .map(|&(cx, cz)| {
+            (
+                (cx, cz),
+                harness.chunk_digest(&harness.generate_chunk(cx, cz)),
+            )
+        })
         .collect();
     reverse.sort();
     let mut forward_sorted = forward.clone();
     forward_sorted.sort();
-    assert_eq!(forward_sorted, reverse, "density generation diverged across orders");
+    assert_eq!(
+        forward_sorted, reverse,
+        "density generation diverged across orders"
+    );
 }
 
 /// Steep candidate ground, located through the public queries so the
@@ -181,9 +194,8 @@ fn no_floating_disconnected_components() {
     let max_y = HEIGHT as i32;
 
     let mut solid = vec![false; (32 * 32 * HEIGHT) as usize];
-    let index_of = |x: i32, y: i32, z: i32| {
-        (((x - min_x) * 32 + (z - min_z)) * HEIGHT as i32 + y) as usize
-    };
+    let index_of =
+        |x: i32, y: i32, z: i32| (((x - min_x) * 32 + (z - min_z)) * HEIGHT as i32 + y) as usize;
     for dcx in 0..2 {
         for dcz in 0..2 {
             let chunk = harness.generate_chunk(cx + dcx, cz + dcz);
@@ -217,19 +229,23 @@ fn no_floating_disconnected_components() {
                 let mut size = 0usize;
                 while let Some((x, y, z)) = stack.pop() {
                     size += 1;
-                    if y == 0
-                        || x == min_x
-                        || x == max_x - 1
-                        || z == min_z
-                        || z == max_z - 1
-                    {
+                    if y == 0 || x == min_x || x == max_x - 1 || z == min_z || z == max_z - 1 {
                         is_grounded = true;
                     }
-                    for (dx, dy, dz) in
-                        [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
-                    {
+                    for (dx, dy, dz) in [
+                        (1, 0, 0),
+                        (-1, 0, 0),
+                        (0, 1, 0),
+                        (0, -1, 0),
+                        (0, 0, 1),
+                        (0, 0, -1),
+                    ] {
                         let (nx, ny, nz) = (x + dx, y + dy, z + dz);
-                        if nx < min_x || nx >= max_x || nz < min_z || nz >= max_z || ny < 0
+                        if nx < min_x
+                            || nx >= max_x
+                            || nz < min_z
+                            || nz >= max_z
+                            || ny < 0
                             || ny >= max_y
                         {
                             continue;
@@ -243,7 +259,9 @@ fn no_floating_disconnected_components() {
                 }
                 if !is_grounded {
                     floaters += 1;
-                    println!("floating component of {size} voxels near ({start_x},{start_y},{start_z})");
+                    println!(
+                        "floating component of {size} voxels near ({start_x},{start_y},{start_z})"
+                    );
                 }
                 component += 1;
             }
@@ -349,7 +367,10 @@ fn structures_silence_the_density_term() {
             }
         }
     }
-    assert!(checked_columns > 25, "structure columns checked: {checked_columns}");
+    assert!(
+        checked_columns > 25,
+        "structure columns checked: {checked_columns}"
+    );
 }
 
 #[test]

@@ -56,11 +56,12 @@ fn bench_chunk_pipeline(c: &mut Criterion) {
     });
 
     let mut layered_spec = fixture_spec();
-    layered_spec.topology = voxelize_gen::TopologySpec::Heightfield(voxelize_gen::HeightfieldLane {
-        base_height: reference_stack(),
-        relief: vec![],
-        slope_probe: 2,
-    });
+    layered_spec.topology =
+        voxelize_gen::TopologySpec::Heightfield(voxelize_gen::HeightfieldLane {
+            base_height: reference_stack(),
+            relief: vec![],
+            slope_probe: 2,
+        });
     let layered = harness_for(layered_spec);
     group.bench_function("full_pipeline_reference_stack", |b| {
         b.iter_batched(

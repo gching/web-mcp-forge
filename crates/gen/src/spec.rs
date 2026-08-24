@@ -26,7 +26,9 @@ use crate::hydro::{CompiledHydrology, HydrologySpec, VoidMaterial};
 use crate::lane::{CompiledLane, LaneGrid, TopologySpec};
 use crate::mosaic::CompiledMosaic;
 use crate::rivers::{CompiledRivers, RiverColumn, RiverPoint};
-use crate::stream::{cell_id, fnv1a_64, hash_unit, mix64, stream_seed, HashStream, SaltPath, Subsystem};
+use crate::stream::{
+    cell_id, fnv1a_64, hash_unit, mix64, stream_seed, HashStream, SaltPath, Subsystem,
+};
 use crate::structures::{
     CompiledStructures, GroundPatch, PieceDef, Pool, StructurePlan, StructureSetSpec, TerrainView,
 };
@@ -177,40 +179,111 @@ pub fn check_compat(recorded: &GeneratorIdentity, current: &GeneratorIdentity) -
 
 #[derive(Debug)]
 pub enum GenError {
-    EmptyGraph { path: String },
-    GraphTooLarge { path: String, got: usize, max: usize },
-    ForwardReference { path: String, node: usize, target: usize },
-    SaltCollision { salt: String },
-    ReservedSalt { salt: String },
-    OutOfRange { path: String, what: &'static str, got: f64 },
-    InvalidSpline { path: String, reason: &'static str },
-    TooManyAxes { got: usize, max: usize },
-    DuplicateAxis { axis: String },
-    UnknownAxis { axis: String },
+    EmptyGraph {
+        path: String,
+    },
+    GraphTooLarge {
+        path: String,
+        got: usize,
+        max: usize,
+    },
+    ForwardReference {
+        path: String,
+        node: usize,
+        target: usize,
+    },
+    SaltCollision {
+        salt: String,
+    },
+    ReservedSalt {
+        salt: String,
+    },
+    OutOfRange {
+        path: String,
+        what: &'static str,
+        got: f64,
+    },
+    InvalidSpline {
+        path: String,
+        reason: &'static str,
+    },
+    TooManyAxes {
+        got: usize,
+        max: usize,
+    },
+    DuplicateAxis {
+        axis: String,
+    },
+    UnknownAxis {
+        axis: String,
+    },
     EmptyPartition,
     NoFallbackZoneEntry,
-    BoxAxisMismatch { biome: String, got: usize, expected: usize },
-    UnknownBiome { key: String },
-    DuplicateBiome { key: String },
-    UnknownBlock { name: String },
-    DuplicateSurfaceTable { key: String },
-    SurfaceTableNotExhaustive { key: String },
-    UnknownPatchField { field: String },
-    UnknownSurfaceTable { key: String, biome: String },
-    DuplicatePiece { key: String },
-    PieceShapeMismatch { key: String },
-    EmptyPool { key: String },
-    UnknownPiece { key: String },
-    UnknownPool { key: String },
-    PoolCannotTerminate { key: String },
-    DuplicateSet { key: String },
-    UnknownSet { key: String },
-    HeightMismatch { spec: u32, config: u32 },
-    UnsupportedFormatVersion { got: u32, supported: u32 },
+    BoxAxisMismatch {
+        biome: String,
+        got: usize,
+        expected: usize,
+    },
+    UnknownBiome {
+        key: String,
+    },
+    DuplicateBiome {
+        key: String,
+    },
+    UnknownBlock {
+        name: String,
+    },
+    DuplicateSurfaceTable {
+        key: String,
+    },
+    SurfaceTableNotExhaustive {
+        key: String,
+    },
+    UnknownPatchField {
+        field: String,
+    },
+    UnknownSurfaceTable {
+        key: String,
+        biome: String,
+    },
+    DuplicatePiece {
+        key: String,
+    },
+    PieceShapeMismatch {
+        key: String,
+    },
+    EmptyPool {
+        key: String,
+    },
+    UnknownPiece {
+        key: String,
+    },
+    UnknownPool {
+        key: String,
+    },
+    PoolCannotTerminate {
+        key: String,
+    },
+    DuplicateSet {
+        key: String,
+    },
+    UnknownSet {
+        key: String,
+    },
+    HeightMismatch {
+        spec: u32,
+        config: u32,
+    },
+    UnsupportedFormatVersion {
+        got: u32,
+        supported: u32,
+    },
     /// Validation failures from the geology/density/rivers/ecology/
     /// flora/mosaic compilers, which report precise messages of their
     /// own.
-    Content { message: String },
+    Content {
+        message: String,
+    },
 }
 
 impl fmt::Display for GenError {
@@ -232,7 +305,9 @@ impl fmt::Display for GenError {
             GenError::OutOfRange { path, what, got } => {
                 write!(f, "{path}: {what} out of range (got {got})")
             }
-            GenError::InvalidSpline { path, reason } => write!(f, "{path}: invalid spline: {reason}"),
+            GenError::InvalidSpline { path, reason } => {
+                write!(f, "{path}: invalid spline: {reason}")
+            }
             GenError::TooManyAxes { got, max } => {
                 write!(f, "climate declares {got} axes; the cap is {max}")
             }
@@ -242,7 +317,11 @@ impl fmt::Display for GenError {
             GenError::NoFallbackZoneEntry => {
                 write!(f, "zoned partition needs at least one unconstrained entry")
             }
-            GenError::BoxAxisMismatch { biome, got, expected } => write!(
+            GenError::BoxAxisMismatch {
+                biome,
+                got,
+                expected,
+            } => write!(
                 f,
                 "climate box for {biome} has {got} intervals, partition uses {expected} axes"
             ),
@@ -254,10 +333,9 @@ impl fmt::Display for GenError {
             GenError::DuplicateSurfaceTable { key } => {
                 write!(f, "duplicate surface table {key:?}")
             }
-            GenError::SurfaceTableNotExhaustive { key } => write!(
-                f,
-                "surface table {key:?} must end in an unconditional rule"
-            ),
+            GenError::SurfaceTableNotExhaustive { key } => {
+                write!(f, "surface table {key:?} must end in an unconditional rule")
+            }
             GenError::UnknownPatchField { field } => {
                 write!(f, "surface rule references unknown patch field {field:?}")
             }
@@ -400,9 +478,12 @@ pub fn compile(
         }
     }
     let resolve_biome = |key: &BiomeKey| -> Result<BiomeId, GenError> {
-        biome_ids.get(key).copied().ok_or_else(|| GenError::UnknownBiome {
-            key: key.0.to_string(),
-        })
+        biome_ids
+            .get(key)
+            .copied()
+            .ok_or_else(|| GenError::UnknownBiome {
+                key: key.0.to_string(),
+            })
     };
 
     let partition = CompiledPartition::compile(
@@ -432,12 +513,12 @@ pub fn compile(
 
     let mut biomes = Vec::new();
     for params in &spec.biomes.registry {
-        let table = surface
-            .table_index(params.surface_table)
-            .ok_or_else(|| GenError::UnknownSurfaceTable {
+        let table = surface.table_index(params.surface_table).ok_or_else(|| {
+            GenError::UnknownSurfaceTable {
                 key: params.surface_table.to_string(),
                 biome: params.key.0.to_string(),
-            })?;
+            }
+        })?;
         let mut dressing = Vec::new();
         for entry in &params.dressing {
             dressing.push(CompiledDressing::compile(
@@ -534,37 +615,35 @@ pub fn compile(
         )),
         None => None,
     };
-    let density = match (&spec.density, &geo) {
-        (Some(density), Some(_)) => Some(
-            CompiledDensity::compile(density, world_seed, dimension).map_err(content)?,
-        ),
-        (Some(_), None) => {
-            return Err(content(
+    let density =
+        match (&spec.density, &geo) {
+            (Some(density), Some(_)) => {
+                Some(CompiledDensity::compile(density, world_seed, dimension).map_err(content)?)
+            }
+            (Some(_), None) => return Err(content(
                 "spec.density requires spec.geology: the density band hangs off the solved spine"
                     .to_string(),
-            ))
-        }
-        _ => None,
-    };
-    let rivers = match (&spec.rivers, &geo) {
-        (Some(rivers), None) => Some(
-            CompiledRivers::compile(
-                rivers,
-                hydro.sea_level(),
-                world_seed,
-                dimension,
-                river_query_reach,
-            )
-            .map_err(content)?,
-        ),
-        (Some(_), Some(_)) => {
-            return Err(content(
+            )),
+            _ => None,
+        };
+    let rivers =
+        match (&spec.rivers, &geo) {
+            (Some(rivers), None) => Some(
+                CompiledRivers::compile(
+                    rivers,
+                    hydro.sea_level(),
+                    world_seed,
+                    dimension,
+                    river_query_reach,
+                )
+                .map_err(content)?,
+            ),
+            (Some(_), Some(_)) => return Err(content(
                 "spec.rivers must be None on geology worlds: rivers come from the solved drainage"
                     .to_string(),
-            ))
-        }
-        _ => None,
-    };
+            )),
+            _ => None,
+        };
     let is_river_world = rivers.is_some() || geo.is_some();
     let river_materials = match (&spec.river_materials, is_river_world) {
         (Some(materials), true) => Some((
@@ -586,9 +665,9 @@ pub fn compile(
         (None, false) => None,
     };
     let ecology = match &spec.ecology {
-        Some(ecology) => Some(
-            CompiledEcology::compile(ecology, world_seed, dimension).map_err(content)?,
-        ),
+        Some(ecology) => {
+            Some(CompiledEcology::compile(ecology, world_seed, dimension).map_err(content)?)
+        }
         None => None,
     };
     let flora = CompiledFlora::compile(
@@ -777,12 +856,7 @@ impl CompiledGenerator {
     /// The 2D density prep for one column: engage gates from slope, the
     /// waterline from sea, solved lakes, and river reaches. Inert when
     /// the world has no density spec.
-    pub fn density_column(
-        &self,
-        x: i32,
-        z: i32,
-        steepness: f64,
-    ) -> crate::density::DensityColumn {
+    pub fn density_column(&self, x: i32, z: i32, steepness: f64) -> crate::density::DensityColumn {
         let Some(density) = &self.density else {
             return crate::density::DensityColumn::inert();
         };
@@ -916,13 +990,7 @@ impl CompiledGenerator {
         palette.last().map(|(block, _)| *block).unwrap_or(0)
     }
 
-    pub(crate) fn adapt_surface(
-        &self,
-        raw: i32,
-        x: i32,
-        z: i32,
-        patches: &[GroundPatch],
-    ) -> i32 {
+    pub(crate) fn adapt_surface(&self, raw: i32, x: i32, z: i32, patches: &[GroundPatch]) -> i32 {
         let raw = raw as f64;
         let mut best: Option<(f64, f64)> = None; // (weight, target)
         for patch in patches {
@@ -973,9 +1041,7 @@ impl CompiledGenerator {
     pub fn dithered_biome(&self, x: i32, z: i32, blend: &BiomeBlend) -> BiomeId {
         match blend.secondary() {
             Some((secondary, weight)) if weight > 0.0 => {
-                let roll = hash_unit(mix64(
-                    self.dither_seed ^ mix64(cell_id(x as i64, z as i64)),
-                ));
+                let roll = hash_unit(mix64(self.dither_seed ^ mix64(cell_id(x as i64, z as i64))));
                 if (roll as f32) < weight {
                     secondary
                 } else {
@@ -1023,7 +1089,11 @@ impl CompiledGenerator {
         !self.carvers.is_empty()
     }
 
-    pub fn build_carve_lattices(&self, min: (i32, i32, i32), max: (i32, i32, i32)) -> CarveLattices {
+    pub fn build_carve_lattices(
+        &self,
+        min: (i32, i32, i32),
+        max: (i32, i32, i32),
+    ) -> CarveLattices {
         self.carvers.build_lattices(min, max)
     }
 
@@ -1071,7 +1141,13 @@ impl CompiledGenerator {
         }
     }
 
-    pub(crate) fn surface_place(&self, table: usize, depth: u16, y: i32, ctx: &SurfaceColumnCtx) -> u32 {
+    pub(crate) fn surface_place(
+        &self,
+        table: usize,
+        depth: u16,
+        y: i32,
+        ctx: &SurfaceColumnCtx,
+    ) -> u32 {
         self.surface.place(table, depth, y, ctx)
     }
 

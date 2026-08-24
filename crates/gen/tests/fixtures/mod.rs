@@ -115,7 +115,13 @@ pub fn fixture_spec() -> GeneratorSpec {
         let warped = b.warp(n, wx, wz, 24.0);
         b.spline(
             warped,
-            &[(-1.0, 34.0), (-0.2, 44.0), (0.1, 52.0), (0.6, 66.0), (1.0, 84.0)],
+            &[
+                (-1.0, 34.0),
+                (-0.2, 44.0),
+                (0.1, 52.0),
+                (0.6, 66.0),
+                (1.0, 84.0),
+            ],
         );
         b.build()
     };
@@ -424,7 +430,13 @@ pub fn reference_stack() -> FieldGraph {
 
     let chain_height = b.smooth_spline(
         chains,
-        &[(-1.0, 0.0), (-0.30, 3.0), (0.20, 22.0), (0.65, 70.0), (1.0, 118.0)],
+        &[
+            (-1.0, 0.0),
+            (-0.30, 3.0),
+            (0.20, 22.0),
+            (0.65, 70.0),
+            (1.0, 118.0),
+        ],
     );
     // Valley influence: positive curvature marks hollows in the chain
     // field; cut them deeper so drainage reads through the ranges.

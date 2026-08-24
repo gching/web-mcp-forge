@@ -1,8 +1,6 @@
 use hashbrown::HashMap;
 
-use voxelize_core::{
-    BlockFace, CornerData, VoxelAccess, UV,
-};
+use voxelize_core::{BlockFace, CornerData, VoxelAccess, UV};
 
 use super::*;
 

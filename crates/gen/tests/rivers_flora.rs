@@ -38,7 +38,9 @@ fn flora_env<'a>(
 fn walker_water_levels_are_monotone_downstream() {
     let harness = walker_harness();
     let generator = &harness.generator;
-    let rivers = generator.walker_rivers().expect("fixture has walker rivers");
+    let rivers = generator
+        .walker_rivers()
+        .expect("fixture has walker rivers");
 
     let height = |x: i32, z: i32| generator.surface_raw(x, z) as f64;
     let mut paths = 0usize;
@@ -58,7 +60,10 @@ fn walker_water_levels_are_monotone_downstream() {
             }
         }
     }
-    assert!(paths > 3, "the fixture should route real rivers ({paths} paths)");
+    assert!(
+        paths > 3,
+        "the fixture should route real rivers ({paths} paths)"
+    );
 }
 
 #[test]
@@ -153,9 +158,15 @@ fn river_stage_cuts_channels_and_contains_water() {
         }
     }
     println!("rivers: {channel_water} wet channel columns, {deep_beds} deep beds, {bank_columns} levee columns");
-    assert!(channel_water > 30, "channels never held water: {channel_water}");
+    assert!(
+        channel_water > 30,
+        "channels never held water: {channel_water}"
+    );
     assert!(deep_beds > 0, "no deep pool got its bed material");
-    assert!(bank_columns > 0, "no containment levee was ever needed/built");
+    assert!(
+        bank_columns > 0,
+        "no containment levee was ever needed/built"
+    );
 }
 
 #[test]
@@ -181,7 +192,14 @@ fn community_species_never_leak_their_patches() {
     };
     let river_dist = |x: i32, z: i32| generator.river_distance(x, z);
     let moisture = |x: i32, z: i32| generator.moisture_at(x, z);
-    let env = flora_env(generator, &surface, &steepness, &biome_key, &river_dist, &moisture);
+    let env = flora_env(
+        generator,
+        &surface,
+        &steepness,
+        &biome_key,
+        &river_dist,
+        &moisture,
+    );
 
     let oakwood = ecology
         .communities()
@@ -195,7 +213,10 @@ fn community_species_never_leak_their_patches() {
         .expect("birch_fringe exists");
 
     let mut cache = CellCache::default();
-    let trees = generator.flora().trees_in((-600, -600), (600, 600), &env, Some(ecology), &mut cache);
+    let trees =
+        generator
+            .flora()
+            .trees_in((-600, -600), (600, 600), &env, Some(ecology), &mut cache);
     assert!(
         trees.len() > 60,
         "the window should carry a real tree census ({} trees)",
@@ -241,8 +262,14 @@ fn community_species_never_leak_their_patches() {
         }
         checked += 1;
     }
-    println!("containment: {checked} community trees verified over {} total", trees.len());
-    assert!(checked > 40, "too few community trees to trust the gate: {checked}");
+    println!(
+        "containment: {checked} community trees verified over {} total",
+        trees.len()
+    );
+    assert!(
+        checked > 40,
+        "too few community trees to trust the gate: {checked}"
+    );
 }
 
 #[test]
@@ -259,7 +286,14 @@ fn tree_instances_agree_across_windows() {
     };
     let river_dist = |x: i32, z: i32| generator.river_distance(x, z);
     let moisture = |x: i32, z: i32| generator.moisture_at(x, z);
-    let env = flora_env(generator, &surface, &steepness, &biome_key, &river_dist, &moisture);
+    let env = flora_env(
+        generator,
+        &surface,
+        &steepness,
+        &biome_key,
+        &river_dist,
+        &moisture,
+    );
 
     // Two windows sharing a 64-block overlap band, like two neighboring
     // chunks with their pads: every tree whose trunk falls in the band
@@ -324,7 +358,10 @@ fn community_floors_carpet_owned_ground() {
         }
     }
     println!("community floors: {floor_plants} plants");
-    assert!(floor_plants > 40, "understory never carpeted: {floor_plants}");
+    assert!(
+        floor_plants > 40,
+        "understory never carpeted: {floor_plants}"
+    );
 }
 
 #[test]

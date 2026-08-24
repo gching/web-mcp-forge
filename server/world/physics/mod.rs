@@ -386,11 +386,8 @@ impl Physics {
             // A gated contact response only modifies impacts at or below
             // its speed threshold (`mag` is the velocity change, i.e. the
             // impact speed); harder hits keep the body's own response.
-            let response = contact_response.filter(|response| {
-                response
-                    .max_impact_speed
-                    .map_or(true, |gate| mag <= gate)
-            });
+            let response = contact_response
+                .filter(|response| response.max_impact_speed.map_or(true, |gate| mag <= gate));
 
             // bounce depending on restitution and min_bounce_impulse; a
             // one-shot contact response overrides the body's restitution

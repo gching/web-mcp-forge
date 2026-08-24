@@ -6,9 +6,9 @@
 //! Placement and stamping re-derive per chunk, so a canopy crossing a
 //! border writes identical voxels from both sides.
 
+use crate::{cell_id, mix64, stream_seed, Fractal, HashStream, NoiseKind, SaltPath, Subsystem};
 use serde::Serialize;
 use voxelize::Registry;
-use crate::{cell_id, mix64, stream_seed, Fractal, HashStream, NoiseKind, SaltPath, Subsystem};
 
 use crate::ecology::{CanopySpec, CellCache, CompiledEcology, Env};
 
@@ -129,19 +129,18 @@ impl CompiledFlora {
             });
         }
 
-        let resolve_mix = |context: &str,
-                           mix: &[(&'static str, f64)]|
-         -> Result<Vec<(usize, f64)>, String> {
-            let mut indices = Vec::new();
-            for (key, weight) in mix {
-                let index = species
-                    .iter()
-                    .position(|def| def.key == *key)
-                    .ok_or_else(|| format!("{context}: unknown species {key}"))?;
-                indices.push((index, *weight));
-            }
-            Ok(indices)
-        };
+        let resolve_mix =
+            |context: &str, mix: &[(&'static str, f64)]| -> Result<Vec<(usize, f64)>, String> {
+                let mut indices = Vec::new();
+                for (key, weight) in mix {
+                    let index = species
+                        .iter()
+                        .position(|def| def.key == *key)
+                        .ok_or_else(|| format!("{context}: unknown species {key}"))?;
+                    indices.push((index, *weight));
+                }
+                Ok(indices)
+            };
 
         let mut compiled_sets = Vec::new();
         for set in sets {
@@ -278,7 +277,10 @@ impl CompiledFlora {
                         let (dx, dz) = disc_offset(&mut point_stream, spec.spread);
                         let x = center_x + dx;
                         let z = center_z + dz;
-                        if x < min.0 - pad || x >= max.0 + pad || z < min.1 - pad || z >= max.1 + pad
+                        if x < min.0 - pad
+                            || x >= max.0 + pad
+                            || z < min.1 - pad
+                            || z >= max.1 + pad
                         {
                             continue;
                         }
@@ -355,12 +357,9 @@ impl CompiledFlora {
 
                     // The cluster's stand identity: a dominant species,
                     // a companion, and a shared maturity.
-                    let dominant =
-                        Self::pick_weighted(&canopy.species_indices, cluster_stream);
-                    let companion =
-                        Self::pick_weighted(&canopy.species_indices, cluster_stream);
-                    let maturity =
-                        1.0 + (cluster_stream.unit() * 2.0 - 1.0) * spec.age_spread;
+                    let dominant = Self::pick_weighted(&canopy.species_indices, cluster_stream);
+                    let companion = Self::pick_weighted(&canopy.species_indices, cluster_stream);
+                    let maturity = 1.0 + (cluster_stream.unit() * 2.0 - 1.0) * spec.age_spread;
 
                     let count =
                         cluster_stream.range_i((spec.points.0 as i32, spec.points.1 as i32));
@@ -375,7 +374,10 @@ impl CompiledFlora {
                         let (dx, dz) = disc_offset(&mut point_stream, spec.spread);
                         let x = center_x + dx;
                         let z = center_z + dz;
-                        if x < min.0 - pad || x >= max.0 + pad || z < min.1 - pad || z >= max.1 + pad
+                        if x < min.0 - pad
+                            || x >= max.0 + pad
+                            || z < min.1 - pad
+                            || z >= max.1 + pad
                         {
                             continue;
                         }
@@ -469,7 +471,13 @@ impl CompiledFlora {
                     ((cluster_x as f64 + 0.2 + cluster_stream.unit() * 0.6) * cell) as i32;
                 let center_z =
                     ((cluster_z as f64 + 0.2 + cluster_stream.unit() * 0.6) * cell) as i32;
-                visit(cluster_x, cluster_z, center_x, center_z, &mut cluster_stream);
+                visit(
+                    cluster_x,
+                    cluster_z,
+                    center_x,
+                    center_z,
+                    &mut cluster_stream,
+                );
             }
         }
     }

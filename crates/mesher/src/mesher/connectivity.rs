@@ -48,11 +48,7 @@ pub fn compute_section_connectivity<S: VoxelAccess>(
 
     let index_of = |x: usize, y: usize, z: usize| (x * size_y + y) * size_z + z;
     let is_passable = |x: usize, y: usize, z: usize| {
-        let id = space.get_voxel(
-            min[0] + x as i32,
-            min[1] + y as i32,
-            min[2] + z as i32,
-        );
+        let id = space.get_voxel(min[0] + x as i32, min[1] + y as i32, min[2] + z as i32);
         registry
             .get_block_by_id(id)
             .is_none_or(|block| !block.is_opaque)

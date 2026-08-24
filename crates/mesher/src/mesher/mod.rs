@@ -4,10 +4,10 @@ mod fluid;
 mod greedy;
 mod lighting;
 mod space;
-mod types;
-mod vertex_light;
 #[cfg(test)]
 mod tests;
+mod types;
+mod vertex_light;
 
 pub use connectivity::{
     compute_section_connectivity, connectivity_pair_bit, CONNECTIVITY_FACES, CONNECTIVITY_FULL,
@@ -22,8 +22,6 @@ use faces::*;
 use fluid::*;
 use lighting::*;
 use space::*;
-
-
 
 pub fn mesh_chunk(mut input: MeshInput) -> MeshOutput {
     input.registry.build_cache();

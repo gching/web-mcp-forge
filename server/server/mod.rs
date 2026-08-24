@@ -42,8 +42,8 @@ use crate::{
     errors::AddWorldError,
     perf,
     world::{
-        check_protocol, Chunks, ClientPreferencesPatch, InboundStateBuffer, MotionProtocol, Registry,
-        World, PROTOCOL_MISMATCH_CLOSE_CODE, PROTOCOL_VERSION,
+        check_protocol, Chunks, ClientPreferencesPatch, InboundStateBuffer, MotionProtocol,
+        Registry, World, PROTOCOL_MISMATCH_CLOSE_CODE, PROTOCOL_VERSION,
     },
     ClientJoinRequest, ClientLeaveRequest, ClientRequest, GetInfo, Preload, Prepare, RtcSenders,
     SyncWorld, Tick, TransportJoinRequest, TransportLeaveRequest,

@@ -224,17 +224,14 @@ impl Mesher {
                                 })
                                 .collect();
 
-                            chunk
-                                .meshes
-                                .get_or_insert_with(HashMap::new)
-                                .insert(
-                                    level as u32,
-                                    MeshProtocol {
-                                        level,
-                                        geometries,
-                                        connectivity: Some(connectivity),
-                                    },
-                                );
+                            chunk.meshes.get_or_insert_with(HashMap::new).insert(
+                                level as u32,
+                                MeshProtocol {
+                                    level,
+                                    geometries,
+                                    connectivity: Some(connectivity),
+                                },
+                            );
                         }
                     }
                     super::gen_profiler::record("mesh: greedy", started.elapsed());

@@ -48,7 +48,10 @@ pub struct ChannelField {
 impl ChannelField {
     /// Builds a field from polylines: each vertex is (x, z, water_y) with
     /// a matching profile entry.
-    pub fn from_polylines(lines: &[(Vec<(f64, f64, f64)>, Vec<ChannelProfile>)], reach: f64) -> Self {
+    pub fn from_polylines(
+        lines: &[(Vec<(f64, f64, f64)>, Vec<ChannelProfile>)],
+        reach: f64,
+    ) -> Self {
         let mut segments = Vec::new();
         for (line, profiles) in lines {
             debug_assert_eq!(line.len(), profiles.len());

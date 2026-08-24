@@ -70,11 +70,8 @@ impl FieldStats {
         let mut sorted = values.to_vec();
         sorted.sort_by(|a, b| a.partial_cmp(b).expect("finite samples"));
         let mean = sorted.iter().sum::<f64>() / sorted.len() as f64;
-        let variance = sorted
-            .iter()
-            .map(|v| (v - mean) * (v - mean))
-            .sum::<f64>()
-            / sorted.len() as f64;
+        let variance =
+            sorted.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / sorted.len() as f64;
         let pct = |p: f64| sorted[((sorted.len() - 1) as f64 * p).round() as usize];
         Self {
             min: sorted[0],
@@ -129,9 +126,7 @@ pub fn band_shares(grid: &FieldGrid, bands: usize) -> Vec<f64> {
     }
     // Residual: whatever variance the coarsest level still carries.
     let mean = level.iter().sum::<f64>() / level.len() as f64;
-    energies.push(
-        level.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / level.len() as f64,
-    );
+    energies.push(level.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / level.len() as f64);
     let total: f64 = energies.iter().sum();
     if total <= 0.0 {
         return vec![0.0; energies.len()];
@@ -214,7 +209,10 @@ pub fn repetition_score(grid: &FieldGrid, decay_threshold: f64) -> f64 {
 /// every tile rugged; belted, eroded terrain mixes calm tiles with rugged
 /// ones. Tile edge in blocks is `window * grid.step`.
 pub fn relief_windows(grid: &FieldGrid, window: usize) -> Vec<f64> {
-    assert!(window >= 2 && window <= grid.size, "window must fit the grid");
+    assert!(
+        window >= 2 && window <= grid.size,
+        "window must fit the grid"
+    );
     let per_axis = grid.size / window;
     let mut reliefs = Vec::with_capacity(per_axis * per_axis);
     for wz in 0..per_axis {
@@ -282,7 +280,10 @@ mod tests {
         let at_period = autocorrelation(&grid, (16, 0));
         let off_period = autocorrelation(&grid, (8, 0));
         assert!(at_period > 0.999, "period lag must correlate: {at_period}");
-        assert!(off_period < -0.9, "half-period must anticorrelate: {off_period}");
+        assert!(
+            off_period < -0.9,
+            "half-period must anticorrelate: {off_period}"
+        );
     }
 
     #[test]

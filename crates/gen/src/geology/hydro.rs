@@ -273,8 +273,8 @@ impl GeoModel {
                     let Some(slot) = neighbor.slot_at(cell, x, z) else {
                         continue;
                     };
-                    let agrees = neighbor.lake[slot]
-                        && (neighbor.filled[slot] as f64 - own).abs() <= 1.0;
+                    let agrees =
+                        neighbor.lake[slot] && (neighbor.filled[slot] as f64 - own).abs() <= 1.0;
                     if !agrees {
                         disputed = true;
                         break 'scan;

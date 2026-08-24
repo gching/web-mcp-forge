@@ -64,7 +64,11 @@ fn stone_yard() -> (Chunks, Registry, WorldConfig) {
 
 /// A pig-sized body resting on the floor, pressed up near the step face.
 fn settled_pig(chunks: &Chunks, registry: &Registry, config: &WorldConfig) -> RigidBody {
-    let aabb = AABB::new().scale_x(0.52).scale_y(0.83).scale_z(0.52).build();
+    let aabb = AABB::new()
+        .scale_x(0.52)
+        .scale_y(0.83)
+        .scale_z(0.52)
+        .build();
     let mut body = RigidBody::new(&aabb).friction(3.0).build();
     body.air_drag = 0.6;
     body.set_position(9.6, FEET_Y + 0.83 / 2.0 + 0.01, 8.5);

@@ -1,7 +1,4 @@
-
-use voxelize_core::{
-    LightUtils, AABB,
-};
+use voxelize_core::{LightUtils, AABB};
 
 use super::*;
 
@@ -31,7 +28,10 @@ pub(super) fn should_skip_opaque_light_sample(
     outward <= 0
 }
 
-pub(super) fn fallback_face_light(neighbors: &NeighborCache, dir: [i32; 3]) -> (u32, u32, u32, u32) {
+pub(super) fn fallback_face_light(
+    neighbors: &NeighborCache,
+    dir: [i32; 3],
+) -> (u32, u32, u32, u32) {
     neighbors.get_all_lights(dir[0], dir[1], dir[2])
 }
 
@@ -44,7 +44,13 @@ pub(super) fn should_apply_stair_self_ao(face_dir: [i32; 3], corner_pos: [f32; 3
     !(face_dir[1] == 1 && corner_pos[1] > 0.75)
 }
 
-pub(super) fn self_ao_probe(local_pos: [f32; 3], ox: f32, oy: f32, oz: f32, aabbs: &[AABB]) -> bool {
+pub(super) fn self_ao_probe(
+    local_pos: [f32; 3],
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    aabbs: &[AABB],
+) -> bool {
     let eps: f32 = 0.05;
     let margin: f32 = 0.001;
     let px = local_pos[0] + ox * eps;

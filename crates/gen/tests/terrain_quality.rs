@@ -50,7 +50,13 @@ fn layered_chains() -> FieldGraph {
     let chains = b.warp(chains_wobbled, wx_macro, wz_macro, 300.0);
     let shaped = b.smooth_spline(
         chains,
-        &[(-1.0, 0.0), (-0.30, 3.0), (0.20, 22.0), (0.65, 70.0), (1.0, 118.0)],
+        &[
+            (-1.0, 0.0),
+            (-0.30, 3.0),
+            (0.20, 22.0),
+            (0.65, 70.0),
+            (1.0, 118.0),
+        ],
     );
     let belts = b.fbm("ref.belts", 1.0 / 900.0, 2, 0.5, 2.0);
     let belt_gate = b.gate(belts, 0.01, 0.14);
@@ -66,8 +72,16 @@ fn reference_stack_terrain_acceptance() {
     // Height distribution: ocean basins, populated midlands, real crests.
     let stats = FieldStats::measure(grid.values());
     println!("reference heights: {stats:?}");
-    assert!(stats.p05 < 40.0, "ocean basins missing: p05 {:.1}", stats.p05);
-    assert!(stats.p99 > 105.0, "mountain crests missing: p99 {:.1}", stats.p99);
+    assert!(
+        stats.p05 < 40.0,
+        "ocean basins missing: p05 {:.1}",
+        stats.p05
+    );
+    assert!(
+        stats.p99 > 105.0,
+        "mountain crests missing: p99 {:.1}",
+        stats.p99
+    );
     assert!(
         stats.p99 - stats.p01 > 85.0,
         "height span too flat: {:.1}",
@@ -78,7 +92,10 @@ fn reference_stack_terrain_acceptance() {
     // 12-block detail to continental structure (band std in blocks).
     let shares = band_shares(&grid, 6);
     let variance = stats.std_dev * stats.std_dev;
-    let band_stds: Vec<f64> = shares.iter().map(|share| (share * variance).sqrt()).collect();
+    let band_stds: Vec<f64> = shares
+        .iter()
+        .map(|share| (share * variance).sqrt())
+        .collect();
     println!("reference band stds (blocks, fine->coarse): {band_stds:?}");
     let meaningful = band_stds.iter().filter(|std| **std >= 1.0).count();
     assert!(
@@ -143,8 +160,8 @@ fn layered_chains_break_the_uniform_ridge_signature() {
         let max_relief = reliefs.iter().cloned().fold(f64::MIN, f64::max);
         let calm = reliefs.iter().filter(|r| **r < max_relief * 0.10).count() as f64
             / reliefs.len() as f64;
-        let rugged = reliefs.iter().filter(|r| **r > max_relief * 0.5).count() as f64
-            / reliefs.len() as f64;
+        let rugged =
+            reliefs.iter().filter(|r| **r > max_relief * 0.5).count() as f64 / reliefs.len() as f64;
         let crests = local_maxima(&grid, 2, 20.0);
         let mean = crests.iter().sum::<f64>() / crests.len().max(1) as f64;
         let crest_cv = (crests.iter().map(|c| (c - mean) * (c - mean)).sum::<f64>()

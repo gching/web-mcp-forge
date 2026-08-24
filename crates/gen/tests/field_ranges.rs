@@ -21,8 +21,14 @@ fn fbm_practical_range_is_stable() {
     for octaves in [2u8, 3, 5, 6] {
         let (p01, p50, p99) = percentiles(octaves, NoiseKind::Fbm);
         assert!(p50.abs() < 0.05, "fbm{octaves} median drifted: {p50}");
-        assert!((0.18..=0.40).contains(&p99), "fbm{octaves} p99 drifted: {p99}");
-        assert!((-0.40..=-0.18).contains(&p01), "fbm{octaves} p01 drifted: {p01}");
+        assert!(
+            (0.18..=0.40).contains(&p99),
+            "fbm{octaves} p99 drifted: {p99}"
+        );
+        assert!(
+            (-0.40..=-0.18).contains(&p01),
+            "fbm{octaves} p01 drifted: {p01}"
+        );
     }
 }
 
@@ -30,8 +36,14 @@ fn fbm_practical_range_is_stable() {
 fn ridged_practical_range_is_stable() {
     for octaves in [3u8, 4] {
         let (p01, p50, p99) = percentiles(octaves, NoiseKind::Ridged);
-        assert!((0.25..=0.45).contains(&p01), "ridged{octaves} p01 drifted: {p01}");
-        assert!((0.6..=0.8).contains(&p50), "ridged{octaves} median drifted: {p50}");
+        assert!(
+            (0.25..=0.45).contains(&p01),
+            "ridged{octaves} p01 drifted: {p01}"
+        );
+        assert!(
+            (0.6..=0.8).contains(&p50),
+            "ridged{octaves} median drifted: {p50}"
+        );
         assert!(p99 > 0.9, "ridged{octaves} p99 drifted: {p99}");
     }
 }
@@ -41,8 +53,14 @@ fn billow_practical_range_is_stable() {
     for octaves in [3u8, 4] {
         let (p01, p50, p99) = percentiles(octaves, NoiseKind::Billow);
         assert!(p01 < -0.9, "billow{octaves} p01 drifted: {p01}");
-        assert!((-0.8..=-0.6).contains(&p50), "billow{octaves} median drifted: {p50}");
-        assert!((-0.45..=-0.25).contains(&p99), "billow{octaves} p99 drifted: {p99}");
+        assert!(
+            (-0.8..=-0.6).contains(&p50),
+            "billow{octaves} median drifted: {p50}"
+        );
+        assert!(
+            (-0.45..=-0.25).contains(&p99),
+            "billow{octaves} p99 drifted: {p99}"
+        );
     }
 }
 
@@ -54,8 +72,14 @@ fn hybrid_multi_practical_range_is_stable() {
             (0.05..=0.25).contains(&p01),
             "hybrid{octaves} p01 drifted: {p01}"
         );
-        assert!((0.2..=0.4).contains(&p50), "hybrid{octaves} median drifted: {p50}");
-        assert!((0.4..=0.55).contains(&p99), "hybrid{octaves} p99 drifted: {p99}");
+        assert!(
+            (0.2..=0.4).contains(&p50),
+            "hybrid{octaves} median drifted: {p50}"
+        );
+        assert!(
+            (0.4..=0.55).contains(&p99),
+            "hybrid{octaves} p99 drifted: {p99}"
+        );
     }
 }
 

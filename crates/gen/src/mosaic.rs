@@ -6,9 +6,9 @@
 //! is a pure function of (x, z, y, slope, aspect, moisture), so any
 //! chunk order reproduces the same ground.
 
+use crate::{stream_seed, Fractal, NoiseKind, SaltPath, Subsystem};
 use serde::Serialize;
 use voxelize::Registry;
-use crate::{stream_seed, Fractal, NoiseKind, SaltPath, Subsystem};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MosaicSpec {
@@ -344,8 +344,8 @@ impl CompiledMosaic {
         if let Some(snow) = &self.snow {
             // Lee shift: downslope pointing -z reads as a north face.
             let lee = -sample.aspect.1;
-            let line = snow.line - lee * snow.aspect_shift
-                + snow.noise.sample2(fx, fz) * snow.noise_amp;
+            let line =
+                snow.line - lee * snow.aspect_shift + snow.noise.sample2(fx, fz) * snow.noise_amp;
             let y = sample.surface as f64;
             if y > line + snow.band * 0.5 {
                 block = if sample.steepness >= snow.scour_slope {

@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use voxelize_core::{
-    BlockDynamicPattern, BlockFace, LightUtils, VoxelAccess, AABB, UV,
-};
+use voxelize_core::{BlockDynamicPattern, BlockFace, LightUtils, VoxelAccess, AABB, UV};
 
 use super::*;
 

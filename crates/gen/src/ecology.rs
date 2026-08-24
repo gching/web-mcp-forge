@@ -16,9 +16,9 @@
 //! positions, so any chunk, thread, or tile order reproduces the same
 //! mosaic.
 
+use crate::{cell_id, mix64, stream_seed, HashStream, SaltPath, Subsystem};
 use hashbrown::HashMap;
 use serde::Serialize;
-use crate::{cell_id, mix64, stream_seed, HashStream, SaltPath, Subsystem};
 
 /// The ecology field and its communities for one world.
 #[derive(Debug, Clone, Serialize)]
@@ -126,11 +126,7 @@ pub struct CompiledEcology {
 }
 
 impl CompiledEcology {
-    pub fn compile(
-        spec: &EcologySpec,
-        world_seed: u32,
-        dimension: &str,
-    ) -> Result<Self, String> {
+    pub fn compile(spec: &EcologySpec, world_seed: u32, dimension: &str) -> Result<Self, String> {
         if spec.cell < 16.0 {
             return Err(format!(
                 "ecology.cell must be >= 16 blocks, got {}",
@@ -145,10 +141,7 @@ impl CompiledEcology {
         }
         for community in &spec.communities {
             if community.weight <= 0.0 {
-                return Err(format!(
-                    "community {}: weight must be > 0",
-                    community.key
-                ));
+                return Err(format!("community {}: weight must be > 0", community.key));
             }
             if let Some(canopy) = &community.canopy {
                 if canopy.points.0 == 0 || canopy.points.1 < canopy.points.0 {
@@ -206,7 +199,13 @@ impl CompiledEcology {
 
     /// The community a cell's site elects, if any. Pure per cell; the
     /// cache only memoizes.
-    fn cell_owner(&self, cell_x: i64, cell_z: i64, env: &Env, cache: &mut CellCache) -> Option<u16> {
+    fn cell_owner(
+        &self,
+        cell_x: i64,
+        cell_z: i64,
+        env: &Env,
+        cache: &mut CellCache,
+    ) -> Option<u16> {
         if let Some(hit) = cache.cells.get(&(cell_x, cell_z)) {
             return *hit;
         }

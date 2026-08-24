@@ -2,7 +2,9 @@ use super::fluid::WATERLOG_FLUID_INSET;
 use super::*;
 use hashbrown::HashMap;
 
-use voxelize_core::{BlockFace, BlockRotation, CornerData, LightColor, LightUtils, VoxelAccess, AABB, UV};
+use voxelize_core::{
+    BlockFace, BlockRotation, CornerData, LightColor, LightUtils, VoxelAccess, AABB, UV,
+};
 
 struct SingleVoxelSpace {
     voxel_id: u32,
@@ -343,8 +345,7 @@ fn self_ao_stair_step_face_bottom_gets_occlusion() {
     let face_bbox_min = [0.0, 0.5, 0.5];
 
     let bottom_of_step = [0.5_f32, 0.5, 0.5];
-    let (s011, s101, s110, s111) =
-        compute_self_ao(bottom_of_step, face_dir, face_bbox_min, &aabbs);
+    let (s011, s101, s110, s111) = compute_self_ao(bottom_of_step, face_dir, face_bbox_min, &aabbs);
 
     assert!(
         s011 || s101 || s110 || s111,
@@ -387,8 +388,7 @@ fn self_ao_stair_step_face_top_no_occlusion() {
     let face_bbox_min = [0.0, 0.5, 0.5];
 
     let top_of_step = [0.5_f32, 1.0, 0.5];
-    let (s011, s101, s110, s111) =
-        compute_self_ao(top_of_step, face_dir, face_bbox_min, &aabbs);
+    let (s011, s101, s110, s111) = compute_self_ao(top_of_step, face_dir, face_bbox_min, &aabbs);
 
     assert!(
         !s011 && !s101 && !s110 && !s111,
@@ -869,8 +869,11 @@ fn a_vertical_run_is_grouped_by_stack_group_not_block_id() {
     let face = lower.faces[0].clone();
 
     let run_length = |upper: Block, top_id: u32| {
-        let mut registry =
-            Registry::new(vec![(0, air.clone()), (LOWER_ID, lower.clone()), (UPPER_ID, upper)]);
+        let mut registry = Registry::new(vec![
+            (0, air.clone()),
+            (LOWER_ID, lower.clone()),
+            (UPPER_ID, upper),
+        ]);
         registry.build_cache();
         let space = ColumnSpace {
             bottom_id: LOWER_ID,
@@ -894,11 +897,7 @@ fn a_vertical_run_is_grouped_by_stack_group_not_block_id() {
         1,
         "a different group ends the run",
     );
-    assert_eq!(
-        run_length(upper_same_group, 0),
-        1,
-        "air ends the run",
-    );
+    assert_eq!(run_length(upper_same_group, 0), 1, "air ends the run",);
 }
 
 /// A vertical run of one fluid centred on the origin, with an optional
@@ -1037,11 +1036,7 @@ fn a_fluid_run_is_measured_down_from_its_surface() {
         ..plain_block(KELP_ID, "Kelp")
     };
 
-    let mut registry = Registry::new(vec![
-        (0, air),
-        (WATER_ID, water.clone()),
-        (KELP_ID, kelp),
-    ]);
+    let mut registry = Registry::new(vec![(0, air), (WATER_ID, water.clone()), (KELP_ID, kelp)]);
     registry.build_cache();
 
     let column = |above: i32, below: i32, waterlogged_offset: Option<i32>| FluidColumnSpace {
@@ -1191,7 +1186,11 @@ fn greedy_quads_carry_emissive_bits() {
     for geometry in &geometries {
         for packed in &geometry.lights {
             packed_lights += 1;
-            assert_ne!(packed & EMISSIVE_BIT, 0, "greedy quad lost the emissive bit");
+            assert_ne!(
+                packed & EMISSIVE_BIT,
+                0,
+                "greedy quad lost the emissive bit"
+            );
             assert_eq!(
                 (packed >> AO_SHIFT) & AO_BITS,
                 2,

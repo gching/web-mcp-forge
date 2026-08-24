@@ -220,7 +220,9 @@ pub(crate) fn compile_climate(
     let mut programs = Vec::new();
     for (key, graph) in &spec.axes {
         if axis_keys.contains(key) {
-            return Err(GenError::DuplicateAxis { axis: key.0.to_string() });
+            return Err(GenError::DuplicateAxis {
+                axis: key.0.to_string(),
+            });
         }
         programs.push(FieldProgram::compile(
             graph,
@@ -231,7 +233,10 @@ pub(crate) fn compile_climate(
         )?);
         axis_keys.push(*key);
     }
-    Ok(CompiledClimate { axis_keys, programs })
+    Ok(CompiledClimate {
+        axis_keys,
+        programs,
+    })
 }
 
 enum CompiledPartitionKind {
@@ -267,9 +272,19 @@ struct CompiledRegion {
 }
 
 enum CompiledOverlay {
-    ShoreBand { biome: BiomeId, from_below: i32, to_above: i32 },
-    OpenWater { biome: BiomeId, min_depth: i32 },
-    Peaks { biome: BiomeId, surface_above: i32 },
+    ShoreBand {
+        biome: BiomeId,
+        from_below: i32,
+        to_above: i32,
+    },
+    OpenWater {
+        biome: BiomeId,
+        min_depth: i32,
+    },
+    Peaks {
+        biome: BiomeId,
+        surface_above: i32,
+    },
 }
 
 pub(crate) struct CompiledPartition {
@@ -611,7 +626,12 @@ impl CompiledPartition {
 
     /// Overlays need terrain context; applied by the generator after the
     /// surface height is known.
-    pub fn apply_overlays(&self, blend: BiomeBlend, surface: i32, sea_level: Option<i32>) -> BiomeBlend {
+    pub fn apply_overlays(
+        &self,
+        blend: BiomeBlend,
+        surface: i32,
+        sea_level: Option<i32>,
+    ) -> BiomeBlend {
         let mut current = blend;
         for overlay in &self.overlays {
             match overlay {
@@ -727,7 +747,11 @@ impl CompiledDressing {
         match &self.cluster {
             Some(cluster) => {
                 self.chance
-                    * smoothstep(cluster.low, cluster.high, cluster.field.sample2(x as f64, z as f64))
+                    * smoothstep(
+                        cluster.low,
+                        cluster.high,
+                        cluster.field.sample2(x as f64, z as f64),
+                    )
             }
             None => self.chance,
         }

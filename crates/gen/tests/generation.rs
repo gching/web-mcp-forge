@@ -16,7 +16,12 @@ use voxelize_gen::*;
 fn region_digest(harness: &Harness, order: &[(i32, i32)]) -> Vec<((i32, i32), u64)> {
     let mut digests: Vec<((i32, i32), u64)> = order
         .iter()
-        .map(|&(cx, cz)| ((cx, cz), harness.chunk_digest(&harness.generate_chunk(cx, cz))))
+        .map(|&(cx, cz)| {
+            (
+                (cx, cz),
+                harness.chunk_digest(&harness.generate_chunk(cx, cz)),
+            )
+        })
         .collect();
     digests.sort();
     digests
@@ -45,7 +50,12 @@ fn chunk_bytes_are_order_and_thread_independent() {
 
     let mut parallel: Vec<((i32, i32), u64)> = coords
         .par_iter()
-        .map(|&(cx, cz)| ((cx, cz), harness.chunk_digest(&harness.generate_chunk(cx, cz))))
+        .map(|&(cx, cz)| {
+            (
+                (cx, cz),
+                harness.chunk_digest(&harness.generate_chunk(cx, cz)),
+            )
+        })
         .collect();
     parallel.sort();
     assert_eq!(forward, parallel, "parallel generation diverged");
@@ -128,7 +138,10 @@ fn structure_slices_reassemble_the_whole_plan() {
         }
     }
     assert_eq!(whole, sliced, "chunk slices disagree with the whole plan");
-    assert!(chunks_touched >= 2, "spanning plan must touch several chunks");
+    assert!(
+        chunks_touched >= 2,
+        "spanning plan must touch several chunks"
+    );
 }
 
 #[test]
@@ -323,8 +336,7 @@ fn identity_and_compat_gate() {
     });
     let generator_d = compile(&tuned, &registry, &config).expect("compiles");
     assert_ne!(
-        generator_a.identity.spec_hash,
-        generator_d.identity.spec_hash,
+        generator_a.identity.spec_hash, generator_d.identity.spec_hash,
         "knob changes must be hash-visible even without a version bump"
     );
 }
@@ -433,8 +445,5 @@ fn generation_cost_smoke() {
     println!("gen cost per 16x16x128 chunk: p50={p50}us p95={p95}us max={max}us");
     // Generous CI bound guarding order-of-magnitude regressions only; the
     // budget conversation proper runs on the criterion benchmarks.
-    assert!(
-        p95 < 250_000,
-        "p95 chunk cost {p95}us blew the smoke bound"
-    );
+    assert!(p95 < 250_000, "p95 chunk cost {p95}us blew the smoke bound");
 }

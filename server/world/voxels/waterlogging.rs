@@ -22,12 +22,7 @@ mod registry_waterlogging_rules_tests {
                 .is_waterlogging_fluid(true)
                 .build(),
         );
-        registry.register_block(
-            &Block::new("Kelp")
-                .id(20)
-                .is_waterloggable(true)
-                .build(),
-        );
+        registry.register_block(&Block::new("Kelp").id(20).is_waterloggable(true).build());
 
         let rules = registry
             .waterlogging_rules()

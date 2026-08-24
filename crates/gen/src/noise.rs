@@ -167,12 +167,17 @@ pub enum NoiseKind {
     /// Musgrave hybrid multifractal: octave contributions are damped by the
     /// running total, so lowlands stay smooth while highlands accumulate
     /// detail. `offset` (0..=2, ~0.7) biases the signal positive.
-    HybridMulti { offset: f64 },
+    HybridMulti {
+        offset: f64,
+    },
     /// Musgrave ridged multifractal: squared ridges with spectral weights
     /// fed back through `gain`, yielding varied crest-and-saddle chains
     /// rather than a uniform ridge field. `offset` in (0..=2] (~1.0),
     /// `gain` in (0..=8] (~2.0).
-    RidgedMulti { offset: f64, gain: f64 },
+    RidgedMulti {
+        offset: f64,
+        gain: f64,
+    },
 }
 
 /// Fractal noise over per-octave Perlin instances. Each octave gets its own
@@ -309,10 +314,7 @@ mod tests {
             let (x, z) = (i as f64 * 0.37, i as f64 * -0.61);
             assert_eq!(a.sample2(x, z).to_bits(), b.sample2(x, z).to_bits());
         }
-        assert_ne!(
-            a.sample2(1.3, 4.7).to_bits(),
-            c.sample2(1.3, 4.7).to_bits()
-        );
+        assert_ne!(a.sample2(1.3, 4.7).to_bits(), c.sample2(1.3, 4.7).to_bits());
     }
 
     #[test]

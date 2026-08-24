@@ -49,7 +49,10 @@ float heightDistScale = smoothstep(uFogNear * 0.3, uFogFar * 0.6, depth);
 float fogFactor = max(distFog, heightFog * heightDistScale);
 
 vec3 fogRay = normalize(vWorldPosition.xyz - cameraPosition);
-vec3 skyDomePos = cameraPosition + fogRay * uSkyFogDimension;
+// Match the camera-centered sky shader. Absolute world coordinates make the
+// sampled dome cross the origin far from spawn, collapsing its gradient into
+// a radial seam across fully fogged terrain.
+vec3 skyDomePos = fogRay * uSkyFogDimension;
 float sfH = normalize(skyDomePos + uSkyFogOffset).y;
 float sfH2 = normalize(skyDomePos + uSkyFogVoidOffset).y;
 vec3 skyColor = mix(uSkyFogMiddleColor, uSkyFogTopColor, max(pow(max(sfH, 0.0), uSkyFogExponent), 0.0));

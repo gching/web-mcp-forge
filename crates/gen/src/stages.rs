@@ -184,8 +184,8 @@ impl ChunkStage for GenShapeStage {
                         let low = surface - band;
                         let high = surface + band;
                         for y in min_y..max_y {
-                            let solid = y <= low
-                                || (y < high && density.solid(x, y, z, surface, &column));
+                            let solid =
+                                y <= low || (y < high && density.solid(x, y, z, surface, &column));
                             if solid {
                                 chunk.set_voxel(x, y, z, base);
                                 continue;
@@ -588,7 +588,11 @@ impl ChunkStage for RiverStage {
                             // edge reads as shore, and a dark bed there
                             // would smear the river twice as wide as its
                             // water.
-                            let material = if water_y - bed >= 3 { bed_material } else { bank_material };
+                            let material = if water_y - bed >= 3 {
+                                bed_material
+                            } else {
+                                bank_material
+                            };
                             chunk.set_voxel(x, bed, z, material);
                         }
                         let fill_top = water_y.min(max_y - 1);
@@ -742,27 +746,30 @@ impl ChunkStage for FloraStage {
             if in_plan || in_channel || is_lake(tree.x, tree.z) {
                 continue;
             }
-            generator.flora().stamp(tree, &mut |x, y, z, block, is_soft| {
-                if x < min_x || x >= max_x || z < min_z || z >= max_z || y < min_y || y >= max_y {
-                    return;
-                }
-                let current = chunk.get_voxel(x, y, z);
-                if is_soft {
-                    if current == 0 {
-                        chunk.set_voxel(x, y, z, block);
+            generator
+                .flora()
+                .stamp(tree, &mut |x, y, z, block, is_soft| {
+                    if x < min_x || x >= max_x || z < min_z || z >= max_z || y < min_y || y >= max_y
+                    {
+                        return;
                     }
-                } else {
-                    // Trunks claim air and passable dressing (grass tufts,
-                    // flowers), never terrain, fluids, or structures.
-                    let is_replaceable = current == 0 || {
-                        let existing = registry.get_block_by_id(current);
-                        existing.is_passable && !existing.is_fluid
-                    };
-                    if is_replaceable {
-                        chunk.set_voxel(x, y, z, block);
+                    let current = chunk.get_voxel(x, y, z);
+                    if is_soft {
+                        if current == 0 {
+                            chunk.set_voxel(x, y, z, block);
+                        }
+                    } else {
+                        // Trunks claim air and passable dressing (grass tufts,
+                        // flowers), never terrain, fluids, or structures.
+                        let is_replaceable = current == 0 || {
+                            let existing = registry.get_block_by_id(current);
+                            existing.is_passable && !existing.is_fluid
+                        };
+                        if is_replaceable {
+                            chunk.set_voxel(x, y, z, block);
+                        }
                     }
-                }
-            });
+                });
         }
 
         // The community floor: understory where a community owns the
@@ -814,7 +821,10 @@ impl ChunkStage for FloraStage {
                     if chunk.get_voxel(x, ground_y + 1, z) != 0 {
                         continue;
                     }
-                    if generator.structures().is_protected(&plans, x, ground_y + 1, z) {
+                    if generator
+                        .structures()
+                        .is_protected(&plans, x, ground_y + 1, z)
+                    {
                         continue;
                     }
                     let block = generator.floor_plant(owner.community, &mut stream);

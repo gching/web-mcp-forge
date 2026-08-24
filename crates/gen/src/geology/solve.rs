@@ -48,7 +48,10 @@ impl GeoModel {
             return Err("geology channel areas must satisfy 4 <= area < area_full".to_string());
         }
         if spec.river_width.0 <= 0.0 || spec.river_width.1 < spec.river_width.0 {
-            return Err(format!("geology river_width span invalid: {:?}", spec.river_width));
+            return Err(format!(
+                "geology river_width span invalid: {:?}",
+                spec.river_width
+            ));
         }
         let relief = &spec.relief;
         if relief.rib_amp < 0.0
@@ -152,10 +155,20 @@ impl GeoModel {
         let sea = spec.sea_level as f64;
         // The plate graph is queried through a domain warp: boundaries
         // bend into arcs, margins roughen, and island chains curve.
-        let wx = x + self.value_fbm(mix64(self.plate_seed ^ 0x77), x, z, spec.plate_warp_scale, 3)
-            * spec.plate_warp_amp;
-        let wz = z + self.value_fbm(mix64(self.plate_seed ^ 0x78), x, z, spec.plate_warp_scale, 3)
-            * spec.plate_warp_amp;
+        let wx = x + self.value_fbm(
+            mix64(self.plate_seed ^ 0x77),
+            x,
+            z,
+            spec.plate_warp_scale,
+            3,
+        ) * spec.plate_warp_amp;
+        let wz = z + self.value_fbm(
+            mix64(self.plate_seed ^ 0x78),
+            x,
+            z,
+            spec.plate_warp_scale,
+            3,
+        ) * spec.plate_warp_amp;
         let (own, d_own, other, d_other) = self.nearest_plates(wx, wz);
 
         // Continentality: land core inside continental plates, ramping
@@ -206,10 +219,9 @@ impl GeoModel {
         let mut class = BoundaryClass::Interior;
         let mut uplift_rate = 0.0;
         if approach > spec.convergence_floor {
-            let strength = ((approach - spec.convergence_floor) / spec.belt_strength_span)
-                .clamp(0.0, 1.0);
-            let (belt, offset, is_trench_side) = match (own.is_continental, other.is_continental)
-            {
+            let strength =
+                ((approach - spec.convergence_floor) / spec.belt_strength_span).clamp(0.0, 1.0);
+            let (belt, offset, is_trench_side) = match (own.is_continental, other.is_continental) {
                 (true, true) => (&spec.belt_collision, 0.0, false),
                 (true, false) => (&spec.belt_arc, spec.arc_inland_offset, false),
                 (false, true) => (&spec.belt_arc, 0.0, true),
@@ -323,7 +335,12 @@ impl GeoModel {
     /// Solve (or fetch) the tile whose interior starts at
     /// `(tile_x * tile, tile_z * tile)`.
     pub fn tile(&self, tile_x: i64, tile_z: i64) -> Arc<GeoTile> {
-        if let Some(hit) = self.tiles.read().expect("geo tile cache").get(&(tile_x, tile_z)) {
+        if let Some(hit) = self
+            .tiles
+            .read()
+            .expect("geo tile cache")
+            .get(&(tile_x, tile_z))
+        {
             return Arc::clone(hit);
         }
         let solved = Arc::new(self.solve(tile_x, tile_z));
@@ -359,8 +376,7 @@ impl GeoModel {
                 // Interiors keep a gentle uplift so dissection reaches a
                 // rolling steady state instead of eroding to a plain.
                 let land = ((prior.height - sea) / spec.base_land.max(1.0)).clamp(0.0, 1.0);
-                uplift[ix * side + iz] =
-                    prior.uplift_rate.max(spec.interior_uplift * land);
+                uplift[ix * side + iz] = prior.uplift_rate.max(spec.interior_uplift * land);
             }
         }
 
@@ -428,7 +444,8 @@ impl GeoModel {
                 for ix in 1..side - 1 {
                     for iz in 1..side - 1 {
                         let index = ix * side + iz;
-                        let lap = snapshot[index - side] + snapshot[index + side]
+                        let lap = snapshot[index - side]
+                            + snapshot[index + side]
                             + snapshot[index - 1]
                             + snapshot[index + 1]
                             - 4.0 * snapshot[index];
@@ -603,8 +620,8 @@ impl GeoModel {
             }
         }
         for index in 0..count {
-            lake[index] = filled[index] > height[index] + self.spec.lake_min_depth
-                && filled[index] > sea;
+            lake[index] =
+                filled[index] > height[index] + self.spec.lake_min_depth && filled[index] > sea;
         }
     }
 
@@ -633,7 +650,6 @@ impl GeoModel {
             }
         }
     }
-
 }
 
 /// `x^(quarters/4)` for nonnegative `x` through exact IEEE sqrt and

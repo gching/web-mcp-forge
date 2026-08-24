@@ -164,10 +164,7 @@ mod tests {
         assert!(BlockUtils::extract_waterlogged(logged));
         assert_eq!(BlockUtils::extract_id(logged), 65535);
         assert_eq!(BlockUtils::extract_stage(logged), 15);
-        assert_eq!(
-            BlockUtils::extract_rotation(logged),
-            BlockRotation::NZ(0.0)
-        );
+        assert_eq!(BlockUtils::extract_rotation(logged), BlockRotation::NZ(0.0));
 
         let unlogged = BlockUtils::insert_waterlogged(logged, false);
         assert_eq!(unlogged, voxel);

@@ -182,8 +182,22 @@ impl CompiledCarvers {
                     }
                     let seed = stream_seed(world_seed, dimension, Subsystem::Carvers, &t.salt, 0);
                     tunnels.push(CompiledTunnelPair {
-                        field_a: Fractal::new(seed ^ 0x0A, t.frequency, 1, 0.5, 2.0, NoiseKind::Fbm),
-                        field_b: Fractal::new(seed ^ 0x0B, t.frequency, 1, 0.5, 2.0, NoiseKind::Fbm),
+                        field_a: Fractal::new(
+                            seed ^ 0x0A,
+                            t.frequency,
+                            1,
+                            0.5,
+                            2.0,
+                            NoiseKind::Fbm,
+                        ),
+                        field_b: Fractal::new(
+                            seed ^ 0x0B,
+                            t.frequency,
+                            1,
+                            0.5,
+                            2.0,
+                            NoiseKind::Fbm,
+                        ),
                         width_mod: Fractal::new(
                             seed ^ 0x0C,
                             t.width_mod_frequency,
@@ -300,8 +314,7 @@ impl CompiledCarvers {
                 continue;
             }
             let mut width = spec.half_width
-                * (1.0
-                    + t.width_mod.sample2(x as f64, z as f64) * spec.width_mod_amplitude);
+                * (1.0 + t.width_mod.sample2(x as f64, z as f64) * spec.width_mod_amplitude);
             if let Some((deep_y, widen)) = spec.deep_widen {
                 if y < deep_y {
                     width *= widen;

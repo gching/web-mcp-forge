@@ -53,10 +53,18 @@ fn hypsometric(height: f64) -> [u8; 3] {
         let t = ((height - SEA) / 130.0).clamp(0.0, 1.0);
         if t < 0.22 {
             let s = t / 0.22;
-            [(96.0 + s * 60.0) as u8, (150.0 + s * 30.0) as u8, (70.0 + s * 20.0) as u8]
+            [
+                (96.0 + s * 60.0) as u8,
+                (150.0 + s * 30.0) as u8,
+                (70.0 + s * 20.0) as u8,
+            ]
         } else if t < 0.6 {
             let s = (t - 0.22) / 0.38;
-            [(156.0 - s * 40.0) as u8, (180.0 - s * 80.0) as u8, (90.0 - s * 30.0) as u8]
+            [
+                (156.0 - s * 40.0) as u8,
+                (180.0 - s * 80.0) as u8,
+                (90.0 - s * 30.0) as u8,
+            ]
         } else {
             let s = ((t - 0.6) / 0.4).min(1.0);
             let v = 120.0 + s * 135.0;
@@ -66,9 +74,12 @@ fn hypsometric(height: f64) -> [u8; 3] {
 }
 
 fn render_height_map(program: &FieldProgram, path: &Path) -> FieldGrid {
-    let grid = FieldGrid::sample((-(SIZE as i32) * STEP / 2, -(SIZE as i32) * STEP / 2), SIZE, STEP, |x, z| {
-        program.sample2(x, z)
-    });
+    let grid = FieldGrid::sample(
+        (-(SIZE as i32) * STEP / 2, -(SIZE as i32) * STEP / 2),
+        SIZE,
+        STEP,
+        |x, z| program.sample2(x, z),
+    );
     let mut pixels = Vec::with_capacity(SIZE * SIZE * 3);
     for iz in 0..SIZE {
         for ix in 0..SIZE {

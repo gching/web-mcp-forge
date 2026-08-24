@@ -1101,9 +1101,7 @@ impl<'a> System<'a> for ChunkUpdatingSystem {
                 coalesced.insert((update.vx, update.vy, update.vz), update);
             }
             let mut all_results = coalesced.into_values().collect::<Vec<_>>();
-            all_results.sort_by(|a, b| {
-                (a.vx, a.vy, a.vz).cmp(&(b.vx, b.vy, b.vz))
-            });
+            all_results.sort_by(|a, b| (a.vx, a.vy, a.vz).cmp(&(b.vx, b.vy, b.vz)));
 
             // Route each update only to clients whose chunk interest covers a
             // chunk the update can affect: the updated chunk itself or any

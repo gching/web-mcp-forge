@@ -17,7 +17,12 @@ use voxelize_gen::*;
 fn region_digest(harness: &Harness, order: &[(i32, i32)]) -> Vec<((i32, i32), u64)> {
     let mut digests: Vec<((i32, i32), u64)> = order
         .iter()
-        .map(|&(cx, cz)| ((cx, cz), harness.chunk_digest(&harness.generate_chunk(cx, cz))))
+        .map(|&(cx, cz)| {
+            (
+                (cx, cz),
+                harness.chunk_digest(&harness.generate_chunk(cx, cz)),
+            )
+        })
         .collect();
     digests.sort();
     digests
@@ -34,11 +39,19 @@ fn geology_chunks_are_order_and_thread_independent() {
 
     coords.reverse();
     let reverse = region_digest(&harness, &coords);
-    assert_eq!(forward, reverse, "reverse-order geology generation diverged");
+    assert_eq!(
+        forward, reverse,
+        "reverse-order geology generation diverged"
+    );
 
     let mut parallel: Vec<((i32, i32), u64)> = coords
         .par_iter()
-        .map(|&(cx, cz)| ((cx, cz), harness.chunk_digest(&harness.generate_chunk(cx, cz))))
+        .map(|&(cx, cz)| {
+            (
+                (cx, cz),
+                harness.chunk_digest(&harness.generate_chunk(cx, cz)),
+            )
+        })
         .collect();
     parallel.sort();
     assert_eq!(forward, parallel, "parallel geology generation diverged");
@@ -189,8 +202,14 @@ fn mosaic_paints_the_geo_surface() {
         }
     }
     println!("mosaic: tones {tone_blocks}, snow {snow_blocks}, dirt patches {patch_blocks}, high ground {high_ground}");
-    assert!(tone_blocks > 50, "moisture tone grading never engaged: {tone_blocks}");
-    assert!(patch_blocks > 20, "substrate patches never engaged: {patch_blocks}");
+    assert!(
+        tone_blocks > 50,
+        "moisture tone grading never engaged: {tone_blocks}"
+    );
+    assert!(
+        patch_blocks > 20,
+        "substrate patches never engaged: {patch_blocks}"
+    );
     if high_ground > 200 {
         assert!(
             snow_blocks > 0,

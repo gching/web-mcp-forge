@@ -1,8 +1,6 @@
 use hashbrown::{HashMap, HashSet};
 
-use voxelize_core::{
-    BlockFace, BlockRotation, LightUtils, VoxelAccess, UV,
-};
+use voxelize_core::{BlockFace, BlockRotation, LightUtils, VoxelAccess, UV};
 
 use super::*;
 
@@ -435,11 +433,7 @@ pub fn mesh_space_greedy<S: VoxelAccess>(
                         let (aos, lights) =
                             compute_face_ao_and_light(dir, block, &neighbors, registry);
                         let is_water_exposed = space.get_voxel_waterlogged(vx, vy, vz)
-                            || space.get_voxel_waterlogged(
-                                vx + dir[0],
-                                vy + dir[1],
-                                vz + dir[2],
-                            )
+                            || space.get_voxel_waterlogged(vx + dir[0], vy + dir[1], vz + dir[2])
                             || registry
                                 .get_block_by_id(space.get_voxel(
                                     vx + dir[0],

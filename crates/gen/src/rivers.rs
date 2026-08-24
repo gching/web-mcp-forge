@@ -7,9 +7,9 @@
 
 use std::sync::{Arc, RwLock};
 
+use crate::{cell_id, mix64, stream_seed, HashStream, SaltPath, Subsystem};
 use hashbrown::HashMap;
 use serde::Serialize;
-use crate::{cell_id, mix64, stream_seed, HashStream, SaltPath, Subsystem};
 
 use crate::channels::{ChannelField, ChannelProfile};
 
@@ -56,9 +56,15 @@ const TILE_CACHE_CAP: usize = 256;
 #[derive(Debug, Clone, Copy)]
 pub enum RiverColumn {
     /// Inside the channel: carve to `bed`, water up to `water_y`.
-    Channel { bed: i32, water_y: i32 },
+    Channel {
+        bed: i32,
+        water_y: i32,
+    },
     /// Containment band: terrain below `raise_to` clamps up to it.
-    Bank { raise_to: i32, water_y: i32 },
+    Bank {
+        raise_to: i32,
+        water_y: i32,
+    },
     Outside,
 }
 
@@ -96,7 +102,10 @@ impl CompiledRivers {
         extra_reach: f64,
     ) -> Result<Self, String> {
         if spec.tile < 128 {
-            return Err(format!("rivers.tile must be >= 128 blocks, got {}", spec.tile));
+            return Err(format!(
+                "rivers.tile must be >= 128 blocks, got {}",
+                spec.tile
+            ));
         }
         if spec.width.0 <= 0.0 || spec.width.1 < spec.width.0 {
             return Err(format!("rivers.width span invalid: {:?}", spec.width));

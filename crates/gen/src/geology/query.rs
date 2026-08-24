@@ -103,7 +103,11 @@ impl GeoModel {
             sum += tile.height_at(cell, fx, fz) * weight;
             norm += weight;
         }
-        let fused = if norm > 1e-9 { sum / norm } else { self.prior(fx, fz).height };
+        let fused = if norm > 1e-9 {
+            sum / norm
+        } else {
+            self.prior(fx, fz).height
+        };
         let coarse = self.compress_height(fused);
         let relief = &self.spec.relief;
 
@@ -161,10 +165,7 @@ impl GeoModel {
             .kept_lake_level_near(owner_x, owner_z, &owner, ofx, ofz, 2)
             .map(|lake| self.compress_height(lake).max(self.spec.sea_level as f64))
             .unwrap_or(self.spec.sea_level as f64);
-        let shore = smooth_window(
-            coarse - waterline,
-            (0.5, relief.shore_calm_band.max(1.0)),
-        );
+        let shore = smooth_window(coarse - waterline, (0.5, relief.shore_calm_band.max(1.0)));
 
         if wants_detail {
             let floor = self.spec.detail_floor.clamp(0.0, 1.0);
@@ -250,7 +251,8 @@ impl GeoModel {
             if weight < 1e-3 {
                 continue;
             }
-            let seed = mix64(self.rib_seed ^ (index as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15));
+            let seed =
+                mix64(self.rib_seed ^ (index as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15));
             // Along-spine coordinate stretched: spurs elongate downhill.
             let along = (fx * ex + fz * ez) / (relief.rib_scale * relief.rib_stretch);
             let across = (-fx * ez + fz * ex) / relief.rib_scale;
@@ -432,8 +434,7 @@ impl GeoModel {
                 if !tile.lake[index] {
                     continue;
                 }
-                let verdicts =
-                    keep.get_or_insert_with(|| self.hydro(tile_x, tile_z));
+                let verdicts = keep.get_or_insert_with(|| self.hydro(tile_x, tile_z));
                 if !verdicts.lake_keep[index] {
                     continue;
                 }
@@ -530,4 +531,5 @@ impl GeoModel {
             digest = mix64(digest ^ h.to_bits() as u64);
         }
         digest
-    }}
+    }
+}

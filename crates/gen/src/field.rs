@@ -227,7 +227,14 @@ impl FieldGraphBuilder {
         persistence: f64,
         lacunarity: f64,
     ) -> NodeId {
-        self.noise(salt, frequency, octaves, persistence, lacunarity, NoiseKind::Fbm)
+        self.noise(
+            salt,
+            frequency,
+            octaves,
+            persistence,
+            lacunarity,
+            NoiseKind::Fbm,
+        )
     }
 
     pub fn ridged(
@@ -238,7 +245,14 @@ impl FieldGraphBuilder {
         persistence: f64,
         lacunarity: f64,
     ) -> NodeId {
-        self.noise(salt, frequency, octaves, persistence, lacunarity, NoiseKind::Ridged)
+        self.noise(
+            salt,
+            frequency,
+            octaves,
+            persistence,
+            lacunarity,
+            NoiseKind::Ridged,
+        )
     }
 
     pub fn billow(
@@ -249,7 +263,14 @@ impl FieldGraphBuilder {
         persistence: f64,
         lacunarity: f64,
     ) -> NodeId {
-        self.noise(salt, frequency, octaves, persistence, lacunarity, NoiseKind::Billow)
+        self.noise(
+            salt,
+            frequency,
+            octaves,
+            persistence,
+            lacunarity,
+            NoiseKind::Billow,
+        )
     }
 
     pub fn hybrid_multi(
@@ -546,9 +567,7 @@ impl CompiledSpline {
     /// overshoot, from divisions and min/abs only.
     fn steffen_tangents(points: &[(f64, f64)]) -> Vec<f64> {
         let n = points.len();
-        let secant = |i: usize| {
-            (points[i + 1].1 - points[i].1) / (points[i + 1].0 - points[i].0)
-        };
+        let secant = |i: usize| (points[i + 1].1 - points[i].1) / (points[i + 1].0 - points[i].0);
         let mut tangents = vec![0.0; n];
         tangents[0] = secant(0);
         tangents[n - 1] = secant(n - 2);
@@ -613,7 +632,9 @@ impl FieldProgram {
         used_salts: &mut hashbrown::HashSet<&'static str>,
     ) -> Result<Self, GenError> {
         if graph.nodes.is_empty() {
-            return Err(GenError::EmptyGraph { path: path.to_string() });
+            return Err(GenError::EmptyGraph {
+                path: path.to_string(),
+            });
         }
         if graph.nodes.len() > MAX_FIELD_NODES {
             return Err(GenError::GraphTooLarge {
@@ -638,16 +659,17 @@ impl FieldProgram {
             Ok(target as u16)
         };
 
-        let check_finite = |value: f64, index: usize, what: &'static str| -> Result<f64, GenError> {
-            if !value.is_finite() {
-                return Err(GenError::OutOfRange {
-                    path: format!("{path}[{index}]"),
-                    what,
-                    got: value,
-                });
-            }
-            Ok(value)
-        };
+        let check_finite =
+            |value: f64, index: usize, what: &'static str| -> Result<f64, GenError> {
+                if !value.is_finite() {
+                    return Err(GenError::OutOfRange {
+                        path: format!("{path}[{index}]"),
+                        what,
+                        got: value,
+                    });
+                }
+                Ok(value)
+            };
 
         // Extracts the ancestor closure of `root` as a nested program whose
         // ops are register-remapped clones sharing the parent's tables.

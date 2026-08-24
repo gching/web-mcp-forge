@@ -29,10 +29,10 @@
 use std::collections::BinaryHeap;
 use std::sync::{Arc, RwLock};
 
+use crate::{cell_id, hash_unit, mix64, stream_seed, SaltPath, Subsystem};
 use hashbrown::HashMap;
 use serde::Serialize;
 use smallvec::SmallVec;
-use crate::{cell_id, hash_unit, mix64, stream_seed, SaltPath, Subsystem};
 
 use crate::channels::{ChannelField, ChannelPoint, ChannelProfile};
 
@@ -413,7 +413,9 @@ impl GeoTile {
         let f10 = self.flow[(ix + 1) * side + iz] as f64;
         let f01 = self.flow[ix * side + iz + 1] as f64;
         let f11 = self.flow[(ix + 1) * side + iz + 1] as f64;
-        f00 * (1.0 - fx) * (1.0 - fz) + f10 * fx * (1.0 - fz) + f01 * (1.0 - fx) * fz
+        f00 * (1.0 - fx) * (1.0 - fz)
+            + f10 * fx * (1.0 - fz)
+            + f01 * (1.0 - fx) * fz
             + f11 * fx * fz
     }
 
@@ -439,7 +441,6 @@ impl GeoTile {
             None
         }
     }
-
 }
 
 fn catmull(p0: f64, p1: f64, p2: f64, p3: f64, t: f64) -> f64 {

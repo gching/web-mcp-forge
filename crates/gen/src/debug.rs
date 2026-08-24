@@ -42,7 +42,11 @@ impl<'a> GenDebug<'a> {
     /// Stable, distinguishable SRGB color per biome id (hashed, not
     /// authored — debug maps are diagnostics, not art).
     fn biome_color(&self, id: u16) -> [u8; 3] {
-        let h = mix64(fnv1a_64(self.generator.biome_key(crate::climate::BiomeId(id)).as_bytes()));
+        let h = mix64(fnv1a_64(
+            self.generator
+                .biome_key(crate::climate::BiomeId(id))
+                .as_bytes(),
+        ));
         let r = 64 + (h & 0x7F) as u8;
         let g = 64 + ((h >> 8) & 0x7F) as u8;
         let b = 64 + ((h >> 16) & 0x7F) as u8;

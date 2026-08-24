@@ -291,8 +291,7 @@ impl<'a> System<'a> for ChunkGeneratingSystem {
                 // its own ring off disk in turn, sweeping whole saved regions
                 // into memory. Parked loads revive on demand exactly like
                 // parked generations.
-                let is_parked =
-                    !pipeline.is_demanded(&coords) && !interests.has_interests(&coords);
+                let is_parked = !pipeline.is_demanded(&coords) && !interests.has_interests(&coords);
                 if !is_parked {
                     mesher.add_chunk(&coords, false);
                 }
