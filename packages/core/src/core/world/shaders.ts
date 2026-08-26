@@ -1317,11 +1317,15 @@ vec4 swayParams = uSwayParams[swayIdx];
 vec4 swayFlags = uSwayParams[swayIdx + 1];
 vec3 swayBlockPosition = vec3(position) / POSITION_UNITS_PER_BLOCK;
 float swayScale = uTime * 0.00002 * swayParams.x;
-float rootScale = mix(
-  1.0,
+// Rooted plants bend from the dirt, but a linear 0→1 over two blocks
+// leaves the stem dead and only the bloom moving. sqrt keeps the root
+// planted and puts the stem at ~70% of the tip.
+float stemT = clamp(
   (stackIndexF + swayBlockPosition.y - floor(swayBlockPosition.y)) / stackHeight,
-  swayFlags.x
+  0.0,
+  1.0
 );
+float rootScale = mix(1.0, sqrt(stemT), swayFlags.x);
 float swayNoise = snoise(vec3(
   swayBlockPosition.x * swayScale + uWindOffset.x,
   swayBlockPosition.y * swayScale * swayParams.w,

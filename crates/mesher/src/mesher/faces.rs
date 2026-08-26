@@ -295,14 +295,23 @@ pub(super) fn process_face<S: VoxelAccess>(
     // shader needs from a water fragment is how much water stands above it,
     // and that run is defined by which voxels hold the fluid, not by a
     // registry grouping.
-    let stack_bits = if is_fluid {
+    let fluid_stack_bits = if is_fluid {
         let (index, count) = fluid_column_position(vx, vy, vz, voxel_id, registry, space);
         with_stack(0, index, count)
-    } else if block.stack_group == 0 {
-        0
     } else {
-        let (index, count) = stack_position(vx, vy, vz, block.stack_group, registry, space);
-        with_stack(0, index, count)
+        0
+    };
+    let block_stack = if !is_fluid && block.stack_group != 0 {
+        Some(stack_position(
+            vx,
+            vy,
+            vz,
+            block.stack_group,
+            registry,
+            space,
+        ))
+    } else {
+        None
     };
 
     let is_opaque = block.is_opaque;
@@ -419,8 +428,11 @@ pub(super) fn process_face<S: VoxelAccess>(
     } else {
         (0.0, 0.0)
     };
+    let plant_jitter_y = block_stack
+        .map(|(index, _)| vy - index as i32)
+        .unwrap_or(vy);
     let (diag_x_offset, diag_z_offset) = if is_diagonal && block.is_plant {
-        plant_position_jitter(vx, vy, vz)
+        plant_position_jitter(vx, plant_jitter_y, vz)
     } else {
         (0.0, 0.0)
     };
@@ -440,6 +452,20 @@ pub(super) fn process_face<S: VoxelAccess>(
         if (rotatable || y_rotatable) && !world_space {
             rotation.rotate_node(&mut pos, y_rotatable, true);
         }
+
+        // A full-height face has vertices at local y=0 and y=1. `fract(y)`
+        // maps both to zero in the shader, so packing only the voxel index
+        // pins the entire lower half of a two-block plant. Advance the packed
+        // position at the upper boundary; the shader adds the remaining
+        // fractional height for partial-height faces.
+        let stack_bits = if is_fluid {
+            fluid_stack_bits
+        } else if let Some((index, count)) = block_stack {
+            let vertex_step = pos[1].floor().clamp(0.0, 1.0) as u32;
+            with_stack(0, index + vertex_step, count)
+        } else {
+            0
+        };
 
         let pos_x = pos[0] + vx as f32;
         let pos_y = pos[1] + vy as f32;

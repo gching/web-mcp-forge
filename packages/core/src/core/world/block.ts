@@ -162,6 +162,13 @@ export type Block = {
   isPlant: boolean;
 
   /**
+   * Vertical-run id shared by blocks that should shade/sway as one column
+   * (peony bottom+top, kelp+lantern). Zero means the block never stacks.
+   * Mirrors the server `stack_group` field.
+   */
+  stackGroup: number;
+
+  /**
    * A list of block face data that this block has.
    */
   faces: {

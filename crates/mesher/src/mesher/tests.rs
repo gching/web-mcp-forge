@@ -706,14 +706,34 @@ fn mesh_single_face(
     registry: &Registry,
     space: &impl VoxelAccess,
 ) -> Vec<i32> {
+    mesh_single_face_at_y(0, block, face, registry, space)
+}
+
+fn mesh_single_face_at_y(
+    vy: i32,
+    block: &Block,
+    face: &BlockFace,
+    registry: &Registry,
+    space: &impl VoxelAccess,
+) -> Vec<i32> {
+    mesh_single_face_data_at_y(vy, block, face, registry, space).1
+}
+
+fn mesh_single_face_data_at_y(
+    vy: i32,
+    block: &Block,
+    face: &BlockFace,
+    registry: &Registry,
+    space: &impl VoxelAccess,
+) -> (Vec<f32>, Vec<i32>) {
     let mut positions = vec![];
     let mut indices = vec![];
     let mut uvs = vec![];
     let mut lights = vec![];
-    let neighbors = NeighborCache::populate(0, 0, 0, space);
+    let neighbors = NeighborCache::populate(0, vy, 0, space);
     process_face(
         0,
-        0,
+        vy,
         0,
         block.id,
         &BlockRotation::PY(0.0),
@@ -732,7 +752,7 @@ fn mesh_single_face(
         &[0, 0, 0],
         false,
     );
-    lights
+    (positions, lights)
 }
 
 #[test]
@@ -872,7 +892,7 @@ fn a_vertical_run_is_grouped_by_stack_group_not_block_id() {
         let mut registry = Registry::new(vec![
             (0, air.clone()),
             (LOWER_ID, lower.clone()),
-            (UPPER_ID, upper),
+            (UPPER_ID, upper.clone()),
         ]);
         registry.build_cache();
         let space = ColumnSpace {
@@ -882,8 +902,45 @@ fn a_vertical_run_is_grouped_by_stack_group_not_block_id() {
         };
         let lights = mesh_single_face(&lower, &face, &registry, &space);
         let count = ((lights[0] >> STACK_COUNT_SHIFT) & STACK_FIELD_BITS) + 1;
-        let index = (lights[0] >> STACK_INDEX_SHIFT) & STACK_FIELD_BITS;
-        assert_eq!(index, 0, "the bottom of a run is index 0");
+        let indices = lights
+            .iter()
+            .map(|light| (light >> STACK_INDEX_SHIFT) & STACK_FIELD_BITS)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            indices,
+            vec![1, 0, 1, 0],
+            "upper face vertices advance through the run while root vertices stay at zero",
+        );
+        if top_id == UPPER_ID && upper.stack_group == GROUP {
+            let (lower_positions, _) =
+                mesh_single_face_data_at_y(0, &lower, &face, &registry, &space);
+            let (upper_positions, upper_lights) =
+                mesh_single_face_data_at_y(1, &upper, &upper.faces[0], &registry, &space);
+            let upper_indices = upper_lights
+                .iter()
+                .map(|light| (light >> STACK_INDEX_SHIFT) & STACK_FIELD_BITS)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                upper_indices,
+                vec![2, 1, 2, 1],
+                "the upper half must continue from the lower seam to the plant tip",
+            );
+            assert_eq!(
+                [
+                    lower_positions[0],
+                    lower_positions[2],
+                    lower_positions[6],
+                    lower_positions[8],
+                ],
+                [
+                    upper_positions[3],
+                    upper_positions[5],
+                    upper_positions[9],
+                    upper_positions[11],
+                ],
+                "stacked plant halves must share the same horizontal jitter at their seam",
+            );
+        }
         count
     };
 

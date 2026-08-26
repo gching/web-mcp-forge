@@ -8,6 +8,7 @@ import {
   getUnderwaterAmbientColor,
   measureWaterColumn,
   UNDERWATER_FOG_FRAGMENT,
+  WATER_DOWNWELLING_EXTINCTION_GLSL,
   WATER_OPTICS,
   WATER_VIEW_EXTINCTION_GLSL,
   WaterOptics,
@@ -116,8 +117,17 @@ describe("ABOVE_SURFACE_WATER_FOG_FRAGMENT", () => {
     );
   });
 
-  it("fades submerged terrain toward the shared in-scattered water color", () => {
+  it("darkens the in-scattered water color with fragment depth", () => {
     expect(ABOVE_SURFACE_WATER_FOG_FRAGMENT).toContain("uUnderwaterAmbient");
+    expect(ABOVE_SURFACE_WATER_FOG_FRAGMENT).toContain(
+      WATER_DOWNWELLING_EXTINCTION_GLSL,
+    );
+    expect(ABOVE_SURFACE_WATER_FOG_FRAGMENT).toContain(
+      WATER_OPTICS.aboveSurfaceScatterDepthScale.toFixed(4),
+    );
+    expect(ABOVE_SURFACE_WATER_FOG_FRAGMENT).toContain(
+      "uWaterLevel - vWorldPosition.y",
+    );
     expect(ABOVE_SURFACE_WATER_FOG_FRAGMENT).toContain(
       "vAboveSurfaceWaterTransmit",
     );

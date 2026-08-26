@@ -38,7 +38,11 @@ pub const GREEDY_BIT: i32 = 1 << 19;
 pub const WAVE_BIT: i32 = 1 << 20;
 pub const WATER_EXPOSED_BIT: i32 = 1 << 21;
 
-/// A voxel's position within its vertical run, and how long that run is.
+/// A vertex's position within a non-fluid vertical run, or a fluid voxel's
+/// position within its column, plus the run length. Non-fluid upper-boundary
+/// vertices advance one step so full-height quads bend instead of mapping
+/// both y=0 and y=1 to the same `fract(y)` value in the shader.
+///
 /// Four bits each caps a run at 16, which is longer than any stack the shader
 /// needs to shade as one object, and deep enough that fluid past it is
 /// already black.

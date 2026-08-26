@@ -3677,6 +3677,9 @@ export class World<T = any> extends Scene implements NetIntercept {
       if (typeof block.lightAttenuation !== "number") {
         block.lightAttenuation = 0;
       }
+      if (typeof block.stackGroup !== "number") {
+        block.stackGroup = 0;
+      }
 
       block.faces.forEach((face) => {
         if (face.independent) {
