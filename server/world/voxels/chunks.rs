@@ -756,6 +756,48 @@ impl Chunks {
         }
     }
 
+    pub fn cancel_pending_updates_in_bounds(&mut self, min: &Vec3<i32>, max: &Vec3<i32>) -> usize {
+        let is_inside = |voxel: &Vec3<i32>| {
+            voxel.0 >= min.0
+                && voxel.0 <= max.0
+                && voxel.1 >= min.1
+                && voxel.1 <= max.1
+                && voxel.2 >= min.2
+                && voxel.2 <= max.2
+        };
+        let previous_count = self.pending_updates_count();
+        self.updates_staging.retain(|voxel, _| !is_inside(voxel));
+        self.updates.retain(|(voxel, _)| !is_inside(voxel));
+        previous_count - self.pending_updates_count()
+    }
+
+    pub fn pending_updates_in_bounds(
+        &self,
+        min: &Vec3<i32>,
+        max: &Vec3<i32>,
+    ) -> HashMap<Vec3<i32>, u32> {
+        let is_inside = |voxel: &Vec3<i32>| {
+            voxel.0 >= min.0
+                && voxel.0 <= max.0
+                && voxel.1 >= min.1
+                && voxel.1 <= max.1
+                && voxel.2 >= min.2
+                && voxel.2 <= max.2
+        };
+        let mut pending = HashMap::new();
+        for (voxel, value) in &self.updates {
+            if is_inside(voxel) {
+                pending.insert(voxel.clone(), *value);
+            }
+        }
+        for (voxel, value) in &self.updates_staging {
+            if is_inside(voxel) {
+                pending.insert(voxel.clone(), *value);
+            }
+        }
+        pending
+    }
+
     /// Schedule `voxel` to become active at absolute tick `active_at`.
     ///
     /// Earliest-deadline upsert:
@@ -1123,6 +1165,49 @@ mod pending_save_queue_tests {
             chunks.to_save.is_empty(),
             "a queue nothing drains must never be filled"
         );
+    }
+}
+
+#[cfg(test)]
+mod pending_update_projection_tests {
+    use super::*;
+    use crate::WorldConfig;
+
+    fn empty_chunks() -> Chunks {
+        Chunks::new(&WorldConfig::new().build())
+    }
+
+    #[test]
+    fn cancel_pending_updates_in_bounds_removes_queued_and_staged_work() {
+        let mut chunks = empty_chunks();
+        chunks.update_voxel(&Vec3(1, 1, 1), 2);
+        chunks.update_voxel(&Vec3(10, 1, 1), 2);
+        chunks.flush_staged_updates();
+        chunks.update_voxel(&Vec3(2, 2, 2), 3);
+        chunks.update_voxel(&Vec3(11, 2, 2), 3);
+
+        let removed = chunks.cancel_pending_updates_in_bounds(&Vec3(0, 0, 0), &Vec3(5, 5, 5));
+
+        assert_eq!(removed, 2);
+        assert_eq!(chunks.pending_updates_count(), 2);
+        assert_eq!(chunks.updates.front(), Some(&(Vec3(10, 1, 1), 2)));
+        assert_eq!(chunks.updates_staging.get(&Vec3(11, 2, 2)), Some(&3));
+    }
+
+    #[test]
+    fn pending_updates_in_bounds_reports_the_latest_projected_values() {
+        let mut chunks = empty_chunks();
+        chunks.update_voxel(&Vec3(1, 1, 1), 2);
+        chunks.update_voxel(&Vec3(10, 1, 1), 2);
+        chunks.flush_staged_updates();
+        chunks.update_voxel(&Vec3(1, 1, 1), 0);
+        chunks.update_voxel(&Vec3(2, 2, 2), 3);
+
+        let pending = chunks.pending_updates_in_bounds(&Vec3(0, 0, 0), &Vec3(5, 5, 5));
+
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending.get(&Vec3(1, 1, 1)), Some(&0));
+        assert_eq!(pending.get(&Vec3(2, 2, 2)), Some(&3));
     }
 }
 
