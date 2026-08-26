@@ -130,6 +130,8 @@ export type PaintSettleReport = {
 
 export type CaptureFrameOptions = {
   isPure?: boolean;
+  /** First-person viewmodel. Off unless a held-item shot asks for it. */
+  isIncludingArm?: boolean;
 };
 
 export type VideoRecordingRequest = {

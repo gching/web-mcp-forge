@@ -88,6 +88,11 @@ export type ScreenshotOptions = {
    */
   isPure?: boolean;
   /**
+   * When true, composite the first-person arm/held item. `/sc` and pure
+   * captures leave it off; pass this (or `?hand=true`) for a viewmodel shot.
+   */
+  isIncludingArm?: boolean;
+  /**
    * Optional capture-only viewport width in CSS pixels. When any of width,
    * height, or deviceScaleFactor is set, the page is temporarily resized for
    * this one capture and restored afterwards. This keeps join/load running at
@@ -441,7 +446,9 @@ export class Agent {
       throw new PageStallError(
         label,
         PAGE_STALL_RETRY_AFTER_MS,
-        `page call "${label}" started ${Date.now() - stalledSince}ms ago, timed out, and still has not settled; ` +
+        `page call "${label}" started ${
+          Date.now() - stalledSince
+        }ms ago, timed out, and still has not settled; ` +
           `refusing to stack another onto a blocked page. Retry in ~${PAGE_STALL_RETRY_AFTER_MS}ms, ` +
           `or POST /reset to reload the page.`,
       );
@@ -1041,7 +1048,10 @@ export class Agent {
     // that to an HTTP 400 before the page is touched at all.
     const captureViewport = resolveCaptureViewport(opts, currentViewport);
     if (!captureViewport) {
-      return this.captureBuffer(opts.isPure === true);
+      return this.captureBuffer(
+        opts.isPure === true,
+        opts.isIncludingArm === true,
+      );
     }
 
     // Resize only for the duration of this capture. Joining/loading at 4K
@@ -1051,7 +1061,10 @@ export class Agent {
     // paying for high resolution only inside this window avoids that.
     await this.setViewportAndAwaitPaint(captureViewport);
     try {
-      return await this.captureBuffer(opts.isPure === true);
+      return await this.captureBuffer(
+        opts.isPure === true,
+        opts.isIncludingArm === true,
+      );
     } finally {
       // Restore even when the capture throws, and wait for the restoration
       // paint too, so the session never keeps running at capture resolution.
@@ -1124,7 +1137,9 @@ export class Agent {
   ): Promise<VideoRecordingStartReport> {
     if (this.activeRecording !== null) {
       throw new Error(
-        `a recording has been running for ${Date.now() - this.activeRecording.startedAt}ms; stop it before starting another`,
+        `a recording has been running for ${
+          Date.now() - this.activeRecording.startedAt
+        }ms; stop it before starting another`,
       );
     }
     const currentViewport = this.currentViewport();
@@ -1279,7 +1294,10 @@ export class Agent {
     };
   }
 
-  private async captureBuffer(isPure: boolean): Promise<Buffer> {
+  private async captureBuffer(
+    isPure: boolean,
+    isIncludingArm = false,
+  ): Promise<Buffer> {
     if (isPure) {
       const dataUrl = await this.withPageTimeout(
         "captureFrame",
@@ -1289,6 +1307,7 @@ export class Agent {
             (o) => window.__agentRequired__().captureFrame(o),
             {
               isPure: true,
+              isIncludingArm,
             },
           ),
       );

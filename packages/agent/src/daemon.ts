@@ -381,8 +381,8 @@ export class AgentDaemon {
     const reason = isFresh
       ? null
       : snapshot === null
-        ? `bridge unreachable: ${failureMessage ?? "unknown"}`
-        : describeStaleConnection(snapshot);
+      ? `bridge unreachable: ${failureMessage ?? "unknown"}`
+      : describeStaleConnection(snapshot);
 
     if (isFresh && wasStale) {
       const staleForMs =
@@ -390,7 +390,9 @@ export class AgentDaemon {
           ? Date.now() - this.freshness.staleSinceAt
           : 0;
       console.log(
-        `[agent-daemon] world fresh again after ${Math.round(staleForMs / 1000)}s ` +
+        `[agent-daemon] world fresh again after ${Math.round(
+          staleForMs / 1000,
+        )}s ` +
           `(join generation ${snapshot?.joinGeneration}, ${this.recoveryAttemptCount} recovery attempt(s))`,
       );
       this.appendEvent("connection-fresh", {
@@ -447,8 +449,9 @@ export class AgentDaemon {
       attempt > IN_PAGE_RECONNECT_ATTEMPTS;
     const strategy = isResetting ? "page reset" : "in-page reconnect";
     console.log(
-      `[agent-daemon] recovery attempt ${attempt} (${strategy}): stale ${Math.round(staleForMs / 1000)}s, ` +
-        `reason: ${this.freshness.reason}`,
+      `[agent-daemon] recovery attempt ${attempt} (${strategy}): stale ${Math.round(
+        staleForMs / 1000,
+      )}s, ` + `reason: ${this.freshness.reason}`,
     );
     this.appendEvent("reconnect-attempt", {
       attempt,
@@ -508,7 +511,9 @@ export class AgentDaemon {
       if (error instanceof PageStallError) {
         throw error;
       }
-      reason = `bridge unreachable (${error instanceof Error ? error.message : String(error)})`;
+      reason = `bridge unreachable (${
+        error instanceof Error ? error.message : String(error)
+      })`;
     }
     reply.code(409);
     void reply.send({
@@ -930,7 +935,9 @@ export class AgentDaemon {
         }
         return {
           ok: false,
-          error: `entity ${entityId} metadata.frozen did not flip false (still ${String(hit.metadata?.frozen)})`,
+          error: `entity ${entityId} metadata.frozen did not flip false (still ${String(
+            hit.metadata?.frozen,
+          )})`,
         };
       }
       return { ok: true, entity };
@@ -1216,7 +1223,11 @@ export class AgentDaemon {
           error: body.entityId
             ? `no entity with id ${body.entityId} within ${FRAME_SEARCH_RADIUS} blocks`
             : `no entity matching kind ~= "${body.kind}" within ${FRAME_SEARCH_RADIUS} blocks ` +
-              `(have: ${[...new Set(entities.map((entity) => entity.kind))].join(", ") || "none"})`,
+              `(have: ${
+                [...new Set(entities.map((entity) => entity.kind))].join(
+                  ", ",
+                ) || "none"
+              })`,
         };
       }
 
@@ -1520,7 +1531,9 @@ export class AgentDaemon {
       }
       const isTriggered = await this.agent.reconnectInPage();
       console.log(
-        `[agent-daemon] manual /reconnect: in-page reconnect ${isTriggered ? "triggered" : "reported nothing to do"}`,
+        `[agent-daemon] manual /reconnect: in-page reconnect ${
+          isTriggered ? "triggered" : "reported nothing to do"
+        }`,
       );
       return {
         ok: true,
@@ -1537,6 +1550,7 @@ export class AgentDaemon {
     this.server.get<{
       Querystring: {
         pure?: string;
+        hand?: string;
         width?: string;
         height?: string;
         scale?: string;
@@ -1546,9 +1560,15 @@ export class AgentDaemon {
       if (!(await this.assertReadableWorld(req.query, reply))) return reply;
       const isPure =
         isAlwaysPure || req.query.pure === "true" || req.query.pure === "1";
+      const isIncludingArm =
+        req.query.hand === "true" || req.query.hand === "1";
       try {
         const requested = parseCaptureViewportQuery(req.query);
-        const buffer = await this.agent.screenshot({ isPure, ...requested });
+        const buffer = await this.agent.screenshot({
+          isPure,
+          isIncludingArm,
+          ...requested,
+        });
         reply.header("content-type", "image/png");
         return buffer;
       } catch (e) {

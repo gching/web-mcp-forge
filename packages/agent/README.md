@@ -49,6 +49,7 @@ page UI. Query parameters (both routes; `pure` is implied on `/sc`):
 | Parameter | Meaning |
 | --- | --- |
 | `pure` | `true`/`1` hides HUD overlays and returns only the WebGL canvas. |
+| `hand` | `true`/`1` composites the first-person arm/held item. Off by default. |
 | `width` | Capture-only viewport width in CSS pixels (integer, max 7680). |
 | `height` | Capture-only viewport height in CSS pixels (integer, max 7680). |
 | `scale` | Capture-only device scale factor (max 4). |
