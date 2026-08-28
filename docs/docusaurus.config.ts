@@ -5,7 +5,8 @@ const sharedTypeDocConfig = (name: string) => ({
   excludePrivate: true,
   excludeProtected: true,
   excludeExternals: true,
-  entryDocument: "none",
+  // Don't dump the GitHub README (raw <img> + relative assets) into /api.
+  readme: "none",
   disableSources: true,
   sort: ["alphabetical"],
   categorizeByGroup: true,
@@ -34,6 +35,9 @@ const config: Config = {
   trailingSlash: undefined,
   markdown: {
     mermaid: true,
+    // TypeDoc markdown is CommonMark. MDX treats `{name}`, `<T>`, and
+    // `typeof Image` as JS/JSX and throws `Image is not defined` at build.
+    format: "detect",
   },
   themes: ["@docusaurus/theme-mermaid"],
 
