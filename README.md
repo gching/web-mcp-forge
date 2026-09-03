@@ -32,8 +32,12 @@ The browser client runs on port `3000` and the world server runs on port `4000`.
 
 Forge is deployed using:
 
-- **ChatGPT Sites** for the browser client and WebMCP experience
-- **Render** for the authoritative world server and persistent world data
+- [`examples/client`](examples/client) is the deployed **ChatGPT Site** frontend and hosts the WebMCP experience.
+- [`examples/server`](examples/server) is the deployed **Render** backend: the authoritative world server and persistent world data.
+
+The WebMCP tool specification starts in
+[`examples/client/src/forge/runtime.ts`](examples/client/src/forge/runtime.ts#L340),
+at `toolDefinitions`.
 
 ## Based on Voxelize
 
