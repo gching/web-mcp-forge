@@ -26,6 +26,7 @@ import {
 import { World } from "./world";
 
 const PI_2 = Math.PI / 2;
+const POINTER_LOCK_CHANGE_TIMEOUT_MS = 1000;
 const emptyQ = new Quaternion();
 
 type SwimState = "upright" | "swimming" | "idleStanding";
@@ -505,6 +506,11 @@ export class RigidControls extends EventEmitter implements NetIntercept {
   private lockRequestId = 0;
 
   /**
+   * The timeout used to detect a Pointer Lock API request that never changes lock state.
+   */
+  private pointerLockRequestTimeout?: ReturnType<typeof setTimeout>;
+
+  /**
    * The callback to unlocking the pointer.
    */
   private unlockCallback: () => void;
@@ -764,7 +770,7 @@ export class RigidControls extends EventEmitter implements NetIntercept {
     );
     const stopObservingPointerLockErrors = observePointerLockErrors(
       this.domElement.ownerDocument,
-      this.onPointerlockError,
+      (reason) => this.failPointerLockRequest(this.lockRequestId, reason),
     );
     this.domElement.addEventListener("click", documentClickHandler);
 
@@ -825,6 +831,7 @@ export class RigidControls extends EventEmitter implements NetIntercept {
     this.inputs = inputs;
 
     return () => {
+      this.clearPointerLockRequestTimeout();
       unbinds.forEach((unbind) => {
         try {
           unbind();
@@ -870,6 +877,25 @@ export class RigidControls extends EventEmitter implements NetIntercept {
   };
 
   /**
+   * Clear the pending request timeout after Pointer Lock succeeds or fails.
+   */
+  private clearPointerLockRequestTimeout = () => {
+    if (this.pointerLockRequestTimeout === undefined) return;
+    clearTimeout(this.pointerLockRequestTimeout);
+    this.pointerLockRequestTimeout = undefined;
+  };
+
+  /**
+   * Handle failure for the current Pointer Lock request.
+   */
+  private failPointerLockRequest = (requestId: number, reason: unknown) => {
+    if (requestId !== this.lockRequestId || this.isLocked) return;
+    this.clearPointerLockRequestTimeout();
+    this.lockCallback = undefined;
+    this.onPointerlockError(reason);
+  };
+
+  /**
    * Lock the cursor to the game, calling `requestPointerLock` on the dom element.
    * Needs to be called within a DOM event listener callback!
    *
@@ -878,13 +904,17 @@ export class RigidControls extends EventEmitter implements NetIntercept {
   lock = (callback?: () => void) => {
     const requestId = ++this.lockRequestId;
     this.lockCallback = callback ? { callback, requestId } : undefined;
+    this.clearPointerLockRequestTimeout();
 
-    requestPointerLock(this.domElement, (reason) => {
-      if (this.lockCallback?.requestId === requestId) {
-        this.lockCallback = undefined;
-      }
-      this.onPointerlockError(reason);
-    });
+    const onFailure = (reason: unknown) =>
+      this.failPointerLockRequest(requestId, reason);
+    this.pointerLockRequestTimeout = setTimeout(() => {
+      onFailure(
+        new Error("Pointer Lock API did not lock the requested element."),
+      );
+    }, POINTER_LOCK_CHANGE_TIMEOUT_MS);
+
+    requestPointerLock(this.domElement, onFailure);
   };
 
   /**
@@ -1937,6 +1967,7 @@ export class RigidControls extends EventEmitter implements NetIntercept {
     this.setInputActive(this.isLocked);
 
     if (this.isLocked) {
+      this.clearPointerLockRequestTimeout();
       this.onLock();
 
       if (this.lockCallback) {

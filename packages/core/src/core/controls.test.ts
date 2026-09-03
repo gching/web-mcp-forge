@@ -140,6 +140,24 @@ describe("RigidControls observer input", () => {
     expect(onError).toHaveBeenCalledWith(failure);
   });
 
+  it("reports a pointer-lock request that never locks the canvas", () => {
+    vi.useFakeTimers();
+    const controls = createControls();
+    const inputs = createInputs();
+    const onError = vi.fn();
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    controls.connect(inputs as never, "in-game");
+    controls.on("pointerlockerror", onError);
+    controls.lock();
+    vi.advanceTimersByTime(1000);
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    logError.mockRestore();
+    vi.useRealTimers();
+  });
+
   it("does not retain a callback after its lock request fails", async () => {
     const controls = createControls();
     const inputs = createInputs();
