@@ -38,6 +38,19 @@ body {
   transform: translate(-50%, -50%);
 }
 
+#pointer-lock-hint {
+  position: fixed;
+  z-index: 1;
+  left: 50%;
+  bottom: 2rem;
+  transform: translateX(-50%);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #678983;
+  background: #181d31e6;
+  color: #eee;
+  font-size: 0.875rem;
+}
+
 #loading {
   position: absolute;
   height: 100vh;

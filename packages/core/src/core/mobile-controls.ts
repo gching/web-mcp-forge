@@ -31,6 +31,7 @@ export class MobileRigidControls extends RigidControls {
     super(camera, domElement, world, options);
 
     this.isLocked = true;
+    this.setInputActive(true);
     this.options.alwaysSprint = true;
   }
 
