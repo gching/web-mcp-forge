@@ -37,3 +37,13 @@ caveats for building, running, and testing it in the cloud VM.
 - Rust type check: `pnpm check` (or `cargo check --workspace --all-targets`).
 - Rust tests: `pnpm test:rust` (or `pnpm test:rust:all`).
 - TypeScript tests: `pnpm test`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked as GitHub issues in `gching/web-mcp-forge`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+This repository uses a single-context domain layout. See `docs/agents/domain.md`.
