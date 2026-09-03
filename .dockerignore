@@ -1,0 +1,13 @@
+.git
+.github
+.husky
+.DS_Store
+.env
+.env.*
+coverage
+data
+node_modules
+target
+**/node_modules
+**/dist
+**/*.log

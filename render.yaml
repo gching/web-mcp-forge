@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: voxelize-example-server
+    runtime: docker
+    plan: 0.5c-512mb
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    numInstances: 1
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: VOXELIZE_DATA_DIR
+        value: /var/data
+      - key: VOXELIZE_SECRET
+        sync: false
+    disk:
+      name: voxelize-worlds
+      mountPath: /var/data
+      sizeGB: 1

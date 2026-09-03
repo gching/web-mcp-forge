@@ -136,6 +136,22 @@ Then open http://localhost:3000.
 
 I strongly recommend using Voxelize as a submodule of the workspace you're building.
 
+### Deploy the example server to Render
+
+The repository includes a Render Blueprint and a server-only Docker image for
+the Rust example server. The deployment exposes `/health`, `/info`, and the
+Voxelize WebSocket endpoint at `/ws/`; it does not serve the example client.
+
+1. Push this repository to GitHub, GitLab, or Bitbucket.
+2. In Render, create a Blueprint from the repository's `render.yaml`.
+3. Set `VOXELIZE_SECRET` when Render prompts for it.
+4. Connect clients to the resulting HTTPS service URL. `Network.connect`
+   converts that URL to the secure `/ws/` WebSocket endpoint automatically.
+
+Render supplies `PORT`. For local runs, the server defaults to port `4000`,
+the join secret `test`, and world data under `data/`. On Render, the Blueprint
+stores the `flat` and `test` worlds on the persistent disk at `/var/data`.
+
 ## Packages
 
 ### npm

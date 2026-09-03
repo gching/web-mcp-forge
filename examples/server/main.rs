@@ -1,13 +1,18 @@
 use log::info;
 use registry::setup_registry;
 use specs::{Component, NullStorage};
+use std::io;
 use voxelize::{
     ChunkStage, FlatlandStage, LSystem, Server, Vec3, VoxelAccess, Voxelize, WorldConfig,
 };
 use worlds::{flat::setup_flat_world, terrain::setup_terrain_world, test::setup_test_world};
 
+mod deployment_config;
 mod registry;
 mod worlds;
+
+#[cfg(test)]
+mod deployment_config_tests;
 
 const ISLAND_LIMIT: i32 = 1;
 const ISLAND_HEIGHT: i32 = 10;
@@ -52,17 +57,20 @@ impl ChunkStage for LimitedStage {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let deployment = deployment_config::DeploymentConfig::from_env()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     let registry = setup_registry();
 
     let mut server = Server::new()
-        .port(4000)
-        .secret("test")
+        .addr("0.0.0.0")
+        .port(deployment.port)
+        .secret(&deployment.secret)
         // .serve("./examples/client/dist")
         .registry(&registry)
         .build();
 
     server
-        .add_world(setup_test_world())
+        .add_world(setup_test_world(&deployment.world_save_dir("test")))
         .expect("Could not create test world.");
 
     server
@@ -70,7 +78,10 @@ async fn main() -> std::io::Result<()> {
         .expect("Could not create terrain world.");
 
     server
-        .add_world(setup_flat_world(&registry))
+        .add_world(setup_flat_world(
+            &registry,
+            &deployment.world_save_dir("flat"),
+        ))
         .expect("Could not create flat world.");
 
     server.set_action_handle("create_world", |value, server| {

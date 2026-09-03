@@ -38,14 +38,14 @@ struct TimeMethodPayload {
     time: f32,
 }
 
-pub fn setup_flat_world(registry: &Registry) -> World {
+pub fn setup_flat_world(registry: &Registry, save_dir: &str) -> World {
     let config = WorldConfig::new()
         .preload(true)
         .preload_radius(2)
         .min_chunk([-50, -50])
         .max_chunk([50, 50])
         .saving(true)
-        .save_dir("data/worlds/flat")
+        .save_dir(save_dir)
         .time_per_day(24000)
         .default_time(12000.0)
         .build();
