@@ -18,7 +18,9 @@ use self::{
     systems::{CountdownSystem, NameMetadataSystem},
 };
 
-use super::shared::{setup_components, setup_dispatcher, setup_entities, setup_methods};
+use super::shared::{
+    setup_components, setup_dispatcher, setup_entities, setup_forge_world, setup_methods,
+};
 
 #[derive(Default, Component)]
 #[storage(NullStorage)]
@@ -61,6 +63,7 @@ pub fn setup_flat_world(registry: &Registry, save_dir: &str) -> World {
     }
 
     setup_components(&mut world);
+    setup_forge_world(&mut world);
     setup_methods(&mut world);
     setup_entities(&mut world);
     setup_dispatcher(&mut world);

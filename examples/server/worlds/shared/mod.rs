@@ -2,6 +2,7 @@
 pub mod client;
 pub mod components;
 pub mod entities;
+pub mod forge;
 // pub mod kdtree;
 pub mod methods;
 pub mod stage;
@@ -11,6 +12,7 @@ pub mod systems;
 pub use client::*;
 pub use components::*;
 pub use entities::*;
+pub use forge::*;
 // pub use kdtree::*;
 pub use methods::*;
 pub use stage::*;
