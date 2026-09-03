@@ -17,6 +17,7 @@ import {
   BOT_HEAD_COLOR,
   BOT_HEAD_FRONT_COLOR,
   BOT_SCALE,
+  BACKEND_SERVER,
   NETWORK_SECRET,
 } from "./config/constants";
 import { Map } from "./map";
@@ -1419,19 +1420,12 @@ network
 /* -------------------------------------------------------------------------- */
 /*                                UNSORTED CODE                               */
 /* -------------------------------------------------------------------------- */
-const BACKEND_SERVER_INSTANCE = new URL(window.location.href);
 const VOXELIZE_LOCALSTORAGE_KEY = "voxelize-world";
 
 const currentWorldName =
   new URLSearchParams(window.location.search).get("world") ??
   localStorage.getItem(VOXELIZE_LOCALSTORAGE_KEY) ??
   "terrain";
-
-if (BACKEND_SERVER_INSTANCE.origin.includes("localhost")) {
-  BACKEND_SERVER_INSTANCE.port = "4000";
-}
-
-const BACKEND_SERVER = BACKEND_SERVER_INSTANCE.toString();
 
 class Box extends VOXELIZE.Entity<{
   position: VOXELIZE.Coords3;
