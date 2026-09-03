@@ -6,6 +6,66 @@ use voxelize::{
 
 const PLANT_SCALE: f32 = 0.6;
 
+/// The Forge MVP contract is intentionally narrower than the legacy example
+/// catalog below. Keep this whitelist separate so the original client can
+/// continue to use its existing block IDs and rendering showcase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForgeMvpBlock {
+    pub name: &'static str,
+    pub id: u32,
+}
+
+pub const FORGE_MVP_BLOCKS: [ForgeMvpBlock; 8] = [
+    ForgeMvpBlock { name: "Air", id: 0 },
+    ForgeMvpBlock {
+        name: "Dirt",
+        id: 1,
+    },
+    ForgeMvpBlock {
+        name: "Stone",
+        id: 2,
+    },
+    ForgeMvpBlock {
+        name: "Grass Block",
+        id: 4,
+    },
+    ForgeMvpBlock {
+        name: "Grass",
+        id: 1000,
+    },
+    ForgeMvpBlock {
+        name: "Oak Planks",
+        id: 40,
+    },
+    ForgeMvpBlock {
+        name: "Oak Log",
+        id: 43,
+    },
+    ForgeMvpBlock {
+        name: "Oak Leaves",
+        id: 44,
+    },
+];
+
+/// Validate the stable Forge MVP names and IDs without constraining the
+/// legacy catalog used by the original fork client.
+pub fn validate_forge_mvp_registry(registry: &Registry) -> Result<(), String> {
+    for expected in FORGE_MVP_BLOCKS {
+        let Some(block) = registry.try_get_block_by_name(expected.name) else {
+            return Err(format!("Forge MVP block is missing: {}", expected.name));
+        };
+
+        if block.id != expected.id {
+            return Err(format!(
+                "Forge MVP block {} has ID {}, expected {}",
+                expected.name, block.id, expected.id
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 pub fn setup_registry() -> Registry {
     let mut registry = Registry::new();
 
@@ -629,4 +689,17 @@ pub fn setup_registry() -> Registry {
     ]);
 
     registry
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{setup_registry, validate_forge_mvp_registry, FORGE_MVP_BLOCKS};
+
+    #[test]
+    fn forge_mvp_whitelist_validates_without_reducing_legacy_catalog() {
+        let registry = setup_registry();
+
+        validate_forge_mvp_registry(&registry).expect("Forge MVP blocks must remain stable");
+        assert!(registry.blocks_by_name.len() > FORGE_MVP_BLOCKS.len());
+    }
 }

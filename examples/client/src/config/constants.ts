@@ -1,12 +1,15 @@
 // Server configuration
-export const BACKEND_SERVER_INSTANCE = new URL(window.location.href);
-if (BACKEND_SERVER_INSTANCE.origin.includes("localhost")) {
+const isLocalDevelopment = window.location.origin.includes("localhost");
+export const BACKEND_SERVER_INSTANCE = new URL(
+  isLocalDevelopment ? window.location.href : "https://web-mcp-forge.onrender.com/",
+);
+if (isLocalDevelopment) {
   BACKEND_SERVER_INSTANCE.port = "4000";
 }
 export const BACKEND_SERVER = BACKEND_SERVER_INSTANCE.toString();
 
 // Network settings
-export const NETWORK_SECRET = "test";
+export const NETWORK_SECRET = "sadaddsdsadsadsadsadsadsadsadsadsaadsdsd212321sadghfhhey54t34dfsfsdfs";
 
 // Storage keys
 export const VOXELIZE_LOCALSTORAGE_KEY = "voxelize-world";
