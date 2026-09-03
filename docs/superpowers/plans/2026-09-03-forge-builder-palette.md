@@ -325,11 +325,13 @@ git commit -m "docs(forge): specify Builder Palette contract"
 
 Compare `HEAD` with starting commit `3c1f6fbdb`; inspect documented standards plus the user-delegated Builder Palette requirements separately. Fix any valid critical or important finding, rerun every affected focused test and the complete verification suite, and commit the repair.
 
-- [ ] **Step 5: Conduct live in-app Browser acceptance**
+- [x] **Step 5: Conduct live in-app Browser acceptance**
 
-Run `pnpm demo`; use only visible Codex in-app Browser at `http://localhost:3000`. Enter the flat Forge World and verify exactly two tools; inspect 27 names/dynamic schema and Player Context categories/capabilities. Build a persisted mixed material structure with Glass, slabs, concrete, lights, and rotated logs; assert resulting blocks/rotations through the agent bridge; submit excluded Water and assert zero applied writes; reload the visible browser and reassert blocks, rotations, and revision. Keep a second participant only if the demo exposes one, then stop only task-started processes.
+Ran `pnpm demo` after the user requested that the prior port holders be stopped. Used only a fresh, visible Codex in-app Browser tab at `http://localhost:3000/?agent=true`; the loaded page reported 197 chunks and exposed exactly `get_player_context` and `build_structure`. Its four dynamic operation schemas each enumerated the exact 27 Builder Palette names, and Player Context reported the ordered metadata/capabilities.
 
-**Status:** BLOCKED on 2026-09-03. The required ports 3000 and 4000 are held by a separately launched demo in `/Users/gching/.codex/worktrees/2021/forge-observer-controls-voxelize`; this worktree neither reused nor stopped those processes.
+Applied a seven-voxel mixed request at `(4, 50, 4)` with Glass, rotated Oak Log, both Oak Slab variants, Blue Concrete, Ember Lamp, and Azure Lamp (`ok: true`, `applied: 7`, `revision: 1`, `persistence: saved`), then a visible Glass control at `(3, 50, 4)` (`ok: true`, `applied: 1`, `revision: 2`). An excluded Water request returned `ok: false` with `invalid_build_request`; context stayed at revision 1 before the Glass control and the attempted cell remained Stone. After an actual visible-browser reload, the page again exposed exactly the two tools and its canonical Player Context reported revision 2 with Glass, Oak Log, both slabs, Blue Concrete, Ember Lamp, and Azure Lamp at the built coordinates.
+
+The starting checkout already contained `window.__agent__`; it was not introduced by this task and, at the user's direction, was excluded from live acceptance evidence. The page-local tools and visible browser therefore establish live material/revision persistence; the rotated-log request was accepted live, while property decoding remains covered by the static runtime tests rather than an unrelated pre-existing global.
 
 - [x] **Step 6: Final clean-worktree evidence**
 
