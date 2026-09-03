@@ -422,15 +422,16 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       }
     };
 
+    window.addEventListener("pagehide", () => {
+      if (this.pendingBuild) {
+        this.rejectPendingBuild(
+          new Error("Forge build failed: the page is navigating."),
+        );
+      }
+    });
+
     if (this.agentMode) {
       this.installAgentBridge();
-      window.addEventListener("pagehide", () => {
-        if (this.pendingBuild) {
-          this.rejectPendingBuild(
-            new Error("Forge build failed: the page is navigating."),
-          );
-        }
-      });
     }
   }
 
@@ -883,7 +884,7 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
           ? runtime.blockInfo(block, position)
           : null;
       },
-      snapshot: async () => runtime.getAgentSnapshot(),
+      snapshot: () => runtime.getAgentSnapshot(),
       connection: () => ({
         isConnected: runtime.network.connected,
         isJoined: runtime.network.joined,
@@ -1044,7 +1045,7 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     return { isSettled: false, elapsedMs: performance.now() - startedAt };
   }
 
-  private async getAgentSnapshot() {
+  private getAgentSnapshot() {
     const player = this.readPlayer();
     let context: ForgeContext | null = null;
     try {

@@ -542,6 +542,11 @@ fn append_write(
     config: &WorldConfig,
     chunks: &Chunks,
 ) -> Result<(), String> {
+    if writes.len() >= MAX_BUILD_WRITES {
+        return Err(format!(
+            "Build Request expands beyond the {MAX_BUILD_WRITES}-write limit."
+        ));
+    }
     let position = Vec3(
         origin
             .0
