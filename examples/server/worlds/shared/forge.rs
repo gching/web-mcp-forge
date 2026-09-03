@@ -83,6 +83,7 @@ struct BuildVoxel {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BuildEnvelope {
+    #[serde(rename = "requestId")]
     request_id: String,
     request: BuildRequest,
 }
