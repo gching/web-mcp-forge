@@ -9,7 +9,7 @@ import { setupForgeTextures } from "./forge/textures";
 
 const WORLD_SERVICE_URL = "https://web-mcp-forge.onrender.com";
 const WORLD_NAME = "flat";
-const NETWORK_SECRET = "test";
+const NETWORK_SECRET = "sadaddsdsadsadsadsadsadsadsadsadsaadsdsd212321sadghfhhey54t34dfsfsdfs";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#main")!;
 const loading = document.querySelector<HTMLDivElement>("#loading")!;
