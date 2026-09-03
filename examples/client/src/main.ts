@@ -17,6 +17,7 @@ import {
   BOT_HEAD_COLOR,
   BOT_HEAD_FRONT_COLOR,
   BOT_SCALE,
+  NETWORK_SECRET,
 } from "./config/constants";
 import { Map } from "./map";
 import { setupWorld } from "./world";
@@ -1965,7 +1966,7 @@ const start = async () => {
 
   animate();
 
-  await network.connect(BACKEND_SERVER, { secret: "test" });
+  await network.connect(BACKEND_SERVER, { secret: NETWORK_SECRET });
   await network.join(currentWorldName);
 
   await world.initialize();
