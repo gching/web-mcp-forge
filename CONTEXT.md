@@ -21,19 +21,19 @@ A bounded, validated change applied to the authoritative Forge World and broadca
 _Avoid_: Client edit, renderer update, local placement
 
 **Build Request**:
-An absolute origin and ordered list of relative `fill`, `hollow_box`, `line`, or `voxels` operations submitted through `build_structure`. Blocks are named directly with the canonical Voxelize Registry names `Air`, `Dirt`, `Stone`, `Grass Block`, `Grass`, `Oak Planks`, `Oak Log`, and `Oak Leaves`.
+An absolute origin and ordered list of relative `fill`, `hollow_box`, `line`, or `voxels` operations submitted through `build_structure`. Each block name must be present in the current server-authored Builder Palette metadata.
 _Avoid_: Structure Plan, build script, raw edits
 
 **Registry**:
 The server-owned catalog of stable block identities and behavior that is sent to clients when they join the Forge World.
 _Avoid_: Texture list, client registry, asset manifest
 
-**Base Palette**:
-The MVP building and terrain set consisting of Dirt, Stone, Grass, Grass Block, Oak Leaves, Oak Log, and Oak Planks, rendered from the nine corresponding 16×16 top, side, and face textures already present under `examples/client/src/assets/pixel-perfection/`.
-_Avoid_: Full texture pack, generated registry, all demo blocks
+**Builder Palette**:
+The ordered 27-block mutation set derived by the Rust Registry and published as validated `forgeBuildPalette` join metadata beside `forgeRevision`. It contains utility `Air`; terrain `Dirt`, `Grass Block`, `Grass`, `Sand`, `Snow`; stone `Stone`, `Granite`, `Graphite`, `Marble`; wood `Oak Planks`, `Oak Slab Top`, `Oak Slab Bottom`, `Oak Log`, `Oak Leaves`, `Birch Log`; detail `Glass`, `Ivory Block`; color `White Concrete`, `Black Concrete`, `Red Concrete`, `Blue Concrete`, `Yellow Concrete`, `Orange Concrete`; and lighting `Torch`, `Ember Lamp`, `Azure Lamp`. Each entry has a canonical ID, category, and `stage`, `rotation`, and `yRotation` capabilities. Missing, malformed, empty, duplicated, or browser-Registry-unknown metadata leaves Forge WebMCP unavailable.
+_Avoid_: the previous eight-block mutation whitelist, a full texture pack, a generated client registry, and all demo blocks
 
 **Texture Readiness**:
-The client state in which every Base Palette texture has finished loading and has been applied to the initialized Registry.
+The client state in which every Builder Palette visual has finished loading and has been applied to the initialized Registry.
 _Avoid_: Registry readiness, world connected, assets requested
 
 **ChatGPT Site**:
