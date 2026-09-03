@@ -19,6 +19,7 @@ import {
   BOT_SCALE,
 } from "./config/constants";
 import { Map } from "./map";
+import { ForgeRuntime } from "./forge/runtime";
 import { setupWorld } from "./world";
 
 VOXELIZE.configurePerfLogging(
@@ -1415,6 +1416,9 @@ network
   .register(events)
   .register(controls);
 
+const forgeRuntime = new ForgeRuntime(network, world, controls, voxelInteract);
+network.register(forgeRuntime);
+
 /* -------------------------------------------------------------------------- */
 /*                                UNSORTED CODE                               */
 /* -------------------------------------------------------------------------- */
@@ -1970,6 +1974,8 @@ const start = async () => {
 
   await world.initialize();
   await setupWorld(world);
+  forgeRuntime.markTextureReadinessComplete();
+  void forgeRuntime.registerWhenReady();
 
   gui
     .add({ time: world.time }, "time", 0, world.options.timePerDay, 0.01)
