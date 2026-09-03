@@ -680,6 +680,24 @@ impl BoundVoxelize {
         self.addrs[0]
     }
 
+    /// Stop accepting connections and wait for the HTTP workers to finish.
+    ///
+    /// The serving future returned by Actix must be polled while the stop
+    /// command is delivered. Owning `self` here lets lifecycle-managed hosts
+    /// perform both actions atomically; [`wait_until_stopped`] remains the
+    /// passive termination primitive for callers that spawned it already.
+    pub async fn stop(self, graceful: bool) -> std::io::Result<()> {
+        let BoundVoxelize { serving, .. } = self;
+        let stop = serving.handle().stop(graceful);
+        tokio::pin!(serving);
+        tokio::pin!(stop);
+
+        tokio::select! {
+            result = &mut serving => result,
+            _ = &mut stop => serving.await,
+        }
+    }
+
     /// Await termination of the already-running server (graceful stop or
     /// fatal error). The accept loop was started by
     /// [`Voxelize::bind_with`]; this never starts a dormant server.
