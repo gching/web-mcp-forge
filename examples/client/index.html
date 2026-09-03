@@ -4,25 +4,41 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Voxelize Demo</title>
+    <title>Forge World</title>
   </head>
   <body>
     <div id="loading">
-      <div id="loading-inner">
-        <div id="loading-bar">
-          <div id="loading-bar-inner"></div>
-        </div>
+      <div id="loading-card">
+        <p class="eyebrow">FORGE / WORLD SERVICE</p>
+        <h1>Entering flat</h1>
+        <p id="loading-message">Connecting to Forge World…</p>
+        <p id="error-message" role="alert" hidden></p>
       </div>
     </div>
     <div id="app">
       <canvas id="main"></canvas>
-      <video id="video" style="display: none" autoplay playsinline></video>
       <div id="crosshair"></div>
-      <ul id="biomes"></ul>
-      <!-- <div id="chat">
-        <ul id="chat-history"></ul>
-        <input id="chat-input" />
-      </div> -->
+      <header id="hud-header">
+        <div>
+          <p class="eyebrow">FORGE / SHARED WORLD</p>
+          <h1>flat</h1>
+        </div>
+        <p id="world-status" data-state="loading">Connecting to World Service…</p>
+      </header>
+      <aside id="help-card">
+        <p class="eyebrow">PLAY</p>
+        <p>Click the world to look around</p>
+        <p><kbd>W A S D</kbd> move · <kbd>F</kbd> fly</p>
+        <p><kbd>Left click</kbd> remove · <kbd>Right click</kbd> place</p>
+      </aside>
+      <section id="palette-panel" aria-label="Forge Base Palette">
+        <div class="palette-heading">
+          <p class="eyebrow">BASE PALETTE</p>
+          <span>1–7 to select</span>
+        </div>
+        <div id="palette"></div>
+        <p class="palette-note">Air is reserved for removal.</p>
+      </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
