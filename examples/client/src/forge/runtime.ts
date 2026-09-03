@@ -1,3 +1,4 @@
+import { BlockRotation } from "@voxelize/core";
 import type * as VOXELIZE from "@voxelize/core";
 
 import type {
@@ -829,7 +830,7 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
         this.world.getVoxelWaterloggedAt(position.x, position.y, position.z),
       ),
       stage: this.world.getVoxelStageAt(position.x, position.y, position.z),
-      yRotation: VOXELIZE.BlockRotation.decode(
+      yRotation: BlockRotation.decode(
         this.world.getVoxelRotationAt(position.x, position.y, position.z),
       )[1],
     };
