@@ -188,9 +188,6 @@ importers:
       '@voxelize/core':
         specifier: workspace:*
         version: link:../../packages/core
-      lil-gui:
-        specifier: ^0.17.0
-        version: 0.17.0
       p5:
         specifier: ^1.11.3
         version: 1.11.12
@@ -6881,9 +6878,6 @@ packages:
 
   light-my-request@5.14.0:
     resolution: {integrity: sha512-aORPWntbpH5esaYpGOOmri0OHDOe3wC5M2MQxZ9dvMLZm6DnaAn0kJlcbU9hwsQgLzmZyReKwFwwPkR+nHu5kA==}
-
-  lil-gui@0.17.0:
-    resolution: {integrity: sha512-MVBHmgY+uEbmJNApAaPbtvNh1RCAeMnKym82SBjtp5rODTYKWtM+MXHCifLe2H2Ti1HuBGBtK/5SyG4ShQ3pUQ==}
 
   lilconfig@2.1.0:
     resolution: {integrity: sha512-utWOt/GHzuUxnLKxB6dk81RoOeoNeHgbrXiuGk4yyF5qlRz+iIVWu56E2fqGHFrXz0QNUhLB/8nKqvRH66JKGQ==}
@@ -18786,8 +18780,6 @@ snapshots:
       cookie: 0.7.1
       process-warning: 3.0.0
       set-cookie-parser: 2.7.2
-
-  lil-gui@0.17.0: {}
 
   lilconfig@2.1.0: {}
 

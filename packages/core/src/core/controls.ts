@@ -18,9 +18,15 @@ import { ChunkUtils } from "../utils";
 
 import { Inputs } from "./inputs";
 import { NetIntercept } from "./network";
+import {
+  observePointerLockErrors,
+  PointerLockFailureHandler,
+  requestPointerLock,
+} from "./pointer-lock-request";
 import { World } from "./world";
 
 const PI_2 = Math.PI / 2;
+const POINTER_LOCK_CHANGE_TIMEOUT_MS = 1000;
 const emptyQ = new Quaternion();
 
 type SwimState = "upright" | "swimming" | "idleStanding";
@@ -461,6 +467,13 @@ export class RigidControls extends EventEmitter implements NetIntercept {
   public isLocked = false;
 
   /**
+   * Whether keyboard movement and perspective controls may accept input.
+   * Pointer lock activates this automatically; host applications can enable
+   * an alternate look input when pointer lock is unavailable.
+   */
+  public isInputActive = false;
+
+  /**
    * The physical rigid body of the client, dimensions described by:
    * - `options.bodyWidth`
    * - `options.bodyHeight`
@@ -483,9 +496,19 @@ export class RigidControls extends EventEmitter implements NetIntercept {
   };
 
   /**
-   * The callback to locking the pointer.
+   * The callback to locking the pointer, tied to its request.
    */
-  private lockCallback: () => void;
+  private lockCallback?: { callback: () => void; requestId: number };
+
+  /**
+   * The ID assigned to the most recent pointer-lock request.
+   */
+  private lockRequestId = 0;
+
+  /**
+   * The timeout used to detect a Pointer Lock API request that never changes lock state.
+   */
+  private pointerLockRequestTimeout?: ReturnType<typeof setTimeout>;
 
   /**
    * The callback to unlocking the pointer.
@@ -667,12 +690,15 @@ export class RigidControls extends EventEmitter implements NetIntercept {
    * The events supported so far are:
    * - `lock`: When the pointerlock is locked.
    * - `unlock`: When the pointerlock is unlocked.
+   * - `pointerlockerror`: When requesting pointer lock fails.
    *
-   * @param event The event name, either `lock` or `unlock`.
+   * @param event The event name.
    * @param listener The listener to call when the event is emitted.
    * @returns The controls instance for chaining.
    */
-  on(event: "lock" | "unlock", listener: () => void) {
+  on(event: "lock" | "unlock", listener: () => void): this;
+  on(event: "pointerlockerror", listener: PointerLockFailureHandler): this;
+  on(event: string | symbol, listener: (...args: any[]) => void) {
     return super.on(event, listener);
   }
 
@@ -735,7 +761,6 @@ export class RigidControls extends EventEmitter implements NetIntercept {
       e.preventDefault();
       this.onPointerlockChange();
     };
-    const pointerLockErrorHandler = this.onPointerlockError;
     const documentClickHandler = this.onDocumentClick;
 
     this.domElement.addEventListener("mousemove", mouseMoveHandler);
@@ -743,9 +768,9 @@ export class RigidControls extends EventEmitter implements NetIntercept {
       "pointerlockchange",
       pointerLockChangeHandler,
     );
-    this.domElement.ownerDocument.addEventListener(
-      "pointerlockerror",
-      pointerLockErrorHandler,
+    const stopObservingPointerLockErrors = observePointerLockErrors(
+      this.domElement.ownerDocument,
+      (reason) => this.failPointerLockRequest(this.lockRequestId, reason),
     );
     this.domElement.addEventListener("click", documentClickHandler);
 
@@ -755,10 +780,7 @@ export class RigidControls extends EventEmitter implements NetIntercept {
         "pointerlockchange",
         pointerLockChangeHandler,
       );
-      this.domElement.ownerDocument.removeEventListener(
-        "pointerlockerror",
-        pointerLockErrorHandler,
-      );
+      stopObservingPointerLockErrors();
       this.domElement.removeEventListener("click", documentClickHandler);
     });
 
@@ -777,7 +799,7 @@ export class RigidControls extends EventEmitter implements NetIntercept {
         inputs.bind(
           code,
           () => {
-            if (!this.isLocked) return;
+            if (!this.isInputActive) return;
             this.movements[movement] = true;
           },
           namespace,
@@ -793,7 +815,7 @@ export class RigidControls extends EventEmitter implements NetIntercept {
         inputs.bind(
           code,
           () => {
-            if (!this.isLocked) return;
+            if (!this.isInputActive) return;
             this.movements[movement] = false;
           },
           namespace,
@@ -809,6 +831,7 @@ export class RigidControls extends EventEmitter implements NetIntercept {
     this.inputs = inputs;
 
     return () => {
+      this.clearPointerLockRequestTimeout();
       unbinds.forEach((unbind) => {
         try {
           unbind();
@@ -829,17 +852,69 @@ export class RigidControls extends EventEmitter implements NetIntercept {
   };
 
   /**
+   * Rotate the camera using pointer movement deltas.
+   */
+  lookBy = (deltaX: number, deltaY: number) => {
+    this.euler.setFromQuaternion(this.quaternion);
+
+    this.euler.y -= (deltaX * this.options.sensitivity * 0.002) / 100;
+    this.euler.x -= (deltaY * this.options.sensitivity * 0.002) / 100;
+
+    this.euler.x = Math.max(
+      PI_2 - this.options.maxPolarAngle,
+      Math.min(PI_2 - this.options.minPolarAngle, this.euler.x),
+    );
+
+    this.quaternion.setFromEuler(this.euler);
+  };
+
+  /**
+   * Enable or disable keyboard input without changing actual pointer-lock state.
+   */
+  setInputActive = (active: boolean) => {
+    this.isInputActive = active;
+    if (!active) this.resetMovements();
+  };
+
+  /**
+   * Clear the pending request timeout after Pointer Lock succeeds or fails.
+   */
+  private clearPointerLockRequestTimeout = () => {
+    if (this.pointerLockRequestTimeout === undefined) return;
+    clearTimeout(this.pointerLockRequestTimeout);
+    this.pointerLockRequestTimeout = undefined;
+  };
+
+  /**
+   * Handle failure for the current Pointer Lock request.
+   */
+  private failPointerLockRequest = (requestId: number, reason: unknown) => {
+    if (requestId !== this.lockRequestId || this.isLocked) return;
+    this.clearPointerLockRequestTimeout();
+    this.lockCallback = undefined;
+    this.onPointerlockError(reason);
+  };
+
+  /**
    * Lock the cursor to the game, calling `requestPointerLock` on the dom element.
    * Needs to be called within a DOM event listener callback!
    *
    * @param callback - Callback to be run once done.
    */
   lock = (callback?: () => void) => {
-    this.domElement.requestPointerLock();
+    const requestId = ++this.lockRequestId;
+    this.lockCallback = callback ? { callback, requestId } : undefined;
+    this.clearPointerLockRequestTimeout();
 
-    if (callback) {
-      this.lockCallback = callback;
-    }
+    const onFailure = (reason: unknown) =>
+      this.failPointerLockRequest(requestId, reason);
+    this.pointerLockRequestTimeout = setTimeout(() => {
+      onFailure(
+        new Error("Pointer Lock API did not lock the requested element."),
+      );
+    }, POINTER_LOCK_CHANGE_TIMEOUT_MS);
+
+    requestPointerLock(this.domElement, onFailure);
   };
 
   /**
@@ -1880,32 +1955,26 @@ export class RigidControls extends EventEmitter implements NetIntercept {
     const movementX = event.movementX || 0;
     const movementY = event.movementY || 0;
 
-    this.euler.setFromQuaternion(this.quaternion);
-
-    this.euler.y -= (movementX * this.options.sensitivity * 0.002) / 100;
-    this.euler.x -= (movementY * this.options.sensitivity * 0.002) / 100;
-
-    this.euler.x = Math.max(
-      PI_2 - this.options.maxPolarAngle,
-      Math.min(PI_2 - this.options.minPolarAngle, this.euler.x),
-    );
-
-    this.quaternion.setFromEuler(this.euler);
+    this.lookBy(movementX, movementY);
   };
 
   /**
    * When the pointer change event is fired, this will be called.
    */
   private onPointerlockChange = () => {
-    if (this.domElement.ownerDocument.pointerLockElement === this.domElement) {
+    this.isLocked =
+      this.domElement.ownerDocument.pointerLockElement === this.domElement;
+    this.setInputActive(this.isLocked);
+
+    if (this.isLocked) {
+      this.clearPointerLockRequestTimeout();
       this.onLock();
 
       if (this.lockCallback) {
-        this.lockCallback();
+        const { callback } = this.lockCallback;
         this.lockCallback = undefined;
+        callback();
       }
-
-      this.isLocked = true;
     } else {
       this.onUnlock();
 
@@ -1913,23 +1982,22 @@ export class RigidControls extends EventEmitter implements NetIntercept {
         this.unlockCallback();
         this.unlockCallback = undefined;
       }
-
-      this.isLocked = false;
     }
   };
 
   /**
    * This happens when you try to lock the pointer too recently.
    */
-  private onPointerlockError = () => {
+  private onPointerlockError: PointerLockFailureHandler = (reason) => {
     console.error("VOXELIZE.RigidControls: Unable to use Pointer Lock API");
+    this.emit("pointerlockerror", reason);
   };
 
   /**
    * Locks the pointer.
    */
   private onDocumentClick = () => {
-    if (this.isLocked) return;
+    if (this.isInputActive) return;
     this.lock();
   };
 

@@ -18,7 +18,6 @@
     "@types/three": "^0.182.0",
     "@voxelize/aabb": "^1.0.0",
     "@voxelize/core": "workspace:*",
-    "lil-gui": "^0.17.0",
     "p5": "^1.11.3",
     "postprocessing": "^6.39.0",
     "three": "^0.183.0"

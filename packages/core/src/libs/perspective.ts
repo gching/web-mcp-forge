@@ -158,7 +158,7 @@ export class Perspective {
     const unbindKeyC = inputs.bind(
       "KeyC",
       () => {
-        if (!this.controls?.isLocked) {
+        if (!this.controls?.isInputActive) {
           return;
         }
         this.toggle();
@@ -171,10 +171,18 @@ export class Perspective {
     );
 
     // no clue why but this seems to work, f5 seems to be reversed
-    const unbindF5 = inputs.bind("F5", () => this.toggle(true), namespace, {
-      identifier: Perspective.INPUT_IDENTIFIER,
-      checkType: "code",
-    });
+    const unbindF5 = inputs.bind(
+      "F5",
+      () => {
+        if (!this.controls?.isInputActive) return;
+        this.toggle(true);
+      },
+      namespace,
+      {
+        identifier: Perspective.INPUT_IDENTIFIER,
+        checkType: "code",
+      },
+    );
 
     this.inputs = inputs;
 
