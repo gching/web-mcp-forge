@@ -9,11 +9,16 @@ import type {
   VoxelPosition,
 } from "./build-language";
 import {
-  FORGE_BASE_PALETTE,
   MAX_BUILD_WRITES,
   expandBuildRequest,
   parseBuildRequest,
 } from "./build-language";
+import {
+  type ForgeBuildPalette,
+  type ForgeBuildPaletteBlock,
+  paletteBlockNames,
+  parseForgeBuildPalette,
+} from "./palette";
 
 type Message = NonNullable<VOXELIZE.NetIntercept["packets"]>[number];
 type ModelContextTool = {
@@ -44,6 +49,7 @@ type ForgeBlockInfo = {
   isPassable: boolean;
   isWaterlogged: boolean;
   stage: number;
+  rotation: number;
   yRotation: number;
 };
 
@@ -77,6 +83,7 @@ type ForgeContext = {
     block: string;
     properties: BuildStateProperties;
   }>;
+  availableBlocks: ForgeBuildPaletteBlock[];
   worldRevision: number;
 };
 
@@ -146,7 +153,11 @@ type ForgeAgentBridge = {
   };
   call: (method: string, payload: unknown) => Promise<unknown>;
   teleport: (position: VoxelPosition) => Promise<void>;
-  face: (input: { yaw?: number; pitch?: number; direction?: VoxelPosition }) => Promise<void>;
+  face: (input: {
+    yaw?: number;
+    pitch?: number;
+    direction?: VoxelPosition;
+  }) => Promise<void>;
   setFlying: (isFlying: boolean) => Promise<void>;
   on: (event: string, listener: AgentEventListener) => () => void;
 };
@@ -176,7 +187,9 @@ const asMessageMethod = (message: Message) => {
   };
 };
 
-const parseMessagePayload = (payload: unknown): Record<string, unknown> | null => {
+const parseMessagePayload = (
+  payload: unknown,
+): Record<string, unknown> | null => {
   if (typeof payload !== "string") return isRecord(payload) ? payload : null;
   try {
     const parsed: unknown = JSON.parse(payload);
@@ -193,7 +206,11 @@ const makeRequestId = () => {
   return `forge-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 };
 
-const toPosition = (value: { x: number; y: number; z: number }): VoxelPosition => ({
+const toPosition = (value: {
+  x: number;
+  y: number;
+  z: number;
+}): VoxelPosition => ({
   x: value.x,
   y: value.y,
   z: value.z,
@@ -208,9 +225,7 @@ const faceForNormal = (normal: VoxelPosition): ForgeFace => {
   return "south";
 };
 
-const cardinalFacing = (
-  yaw: number,
-): "north" | "east" | "south" | "west" => {
+const cardinalFacing = (yaw: number): "north" | "east" | "south" | "west" => {
   const degrees = ((yaw * 180) / Math.PI) % 360;
   const normalized = (degrees + 360) % 360;
   if (normalized >= 315 || normalized < 45) return "north";
@@ -219,11 +234,9 @@ const cardinalFacing = (
   return "west";
 };
 
-const isCanonicalBlock = (name: string) =>
-  (FORGE_BASE_PALETTE as readonly string[]).includes(name);
-
 const propertySnapshot = (block: ForgeBlockInfo): BuildStateProperties => ({
   stage: block.stage,
+  rotation: block.rotation,
   yRotation: block.yRotation,
 });
 
@@ -246,69 +259,87 @@ const schemaProperties = {
   },
 };
 
-const schemaBlock = {
-  type: "object",
-  properties: {
-    at: schemaPosition,
-    block: { enum: [...FORGE_BASE_PALETTE] },
-    properties: schemaProperties,
-  },
-  required: ["at", "block"],
-  additionalProperties: false,
-};
+const blockSchema = (names: string[]) => ({ enum: names });
 
-const schemaOperation = {
-  oneOf: [
-    {
-      type: "object",
-      properties: {
-        type: { const: "fill" },
-        at: schemaPosition,
-        size: schemaPosition,
-        block: { enum: [...FORGE_BASE_PALETTE] },
-        properties: schemaProperties,
-      },
-      required: ["type", "at", "size", "block"],
-      additionalProperties: false,
+export const buildStructureInputSchema = (palette: ForgeBuildPalette) => {
+  const names = palette.blocks.map((block) => block.name);
+  const schemaBlock = {
+    type: "object",
+    properties: {
+      at: schemaPosition,
+      block: blockSchema(names),
+      properties: schemaProperties,
     },
-    {
-      type: "object",
-      properties: {
-        type: { const: "hollow_box" },
-        at: schemaPosition,
-        size: schemaPosition,
-        block: { enum: [...FORGE_BASE_PALETTE] },
-        properties: schemaProperties,
+    required: ["at", "block"],
+    additionalProperties: false,
+  };
+  const schemaOperation = {
+    oneOf: [
+      {
+        type: "object",
+        properties: {
+          type: { const: "fill" },
+          at: schemaPosition,
+          size: schemaPosition,
+          block: blockSchema(names),
+          properties: schemaProperties,
+        },
+        required: ["type", "at", "size", "block"],
+        additionalProperties: false,
       },
-      required: ["type", "at", "size", "block"],
-      additionalProperties: false,
-    },
-    {
-      type: "object",
-      properties: {
-        type: { const: "line" },
-        from: schemaPosition,
-        to: schemaPosition,
-        block: { enum: [...FORGE_BASE_PALETTE] },
-        properties: schemaProperties,
+      {
+        type: "object",
+        properties: {
+          type: { const: "hollow_box" },
+          at: schemaPosition,
+          size: schemaPosition,
+          block: blockSchema(names),
+          properties: schemaProperties,
+        },
+        required: ["type", "at", "size", "block"],
+        additionalProperties: false,
       },
-      required: ["type", "from", "to", "block"],
-      additionalProperties: false,
-    },
-    {
-      type: "object",
-      properties: {
-        type: { const: "voxels" },
-        blocks: { type: "array", minItems: 1, items: schemaBlock },
+      {
+        type: "object",
+        properties: {
+          type: { const: "line" },
+          from: schemaPosition,
+          to: schemaPosition,
+          block: blockSchema(names),
+          properties: schemaProperties,
+        },
+        required: ["type", "from", "to", "block"],
+        additionalProperties: false,
       },
-      required: ["type", "blocks"],
-      additionalProperties: false,
+      {
+        type: "object",
+        properties: {
+          type: { const: "voxels" },
+          blocks: { type: "array", minItems: 1, items: schemaBlock },
+        },
+        required: ["type", "blocks"],
+        additionalProperties: false,
+      },
+    ],
+  };
+  return {
+    type: "object",
+    properties: {
+      origin: schemaPosition,
+      operations: {
+        type: "array",
+        minItems: 1,
+        items: schemaOperation,
+      },
     },
-  ],
+    required: ["origin", "operations"],
+    additionalProperties: false,
+  };
 };
 
 const toolDefinitions = (
   runtime: ForgeRuntime,
+  palette: ForgeBuildPalette,
 ): ModelContextTool[] => [
   {
     name: "get_player_context",
@@ -333,19 +364,7 @@ const toolDefinitions = (
     title: "Build Structure",
     description:
       "Apply an exact ordered Forge Build Request to the authoritative shared world. Requests use one absolute origin and relative fill, hollow_box, line, or voxels operations; later writes win, Air removes blocks, and the expanded request is limited to 10,000 writes.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        origin: schemaPosition,
-        operations: {
-          type: "array",
-          minItems: 1,
-          items: schemaOperation,
-        },
-      },
-      required: ["origin", "operations"],
-      additionalProperties: false,
-    },
+    inputSchema: buildStructureInputSchema(palette),
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -372,6 +391,8 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
   private textureReady = false;
   private toolsRegistered = false;
   private revision = 0;
+  private palette: ForgeBuildPalette | null = null;
+  private paletteError: Error | null = null;
   private readonly buildTimeoutMs: number;
   private pendingBuild: {
     requestId: string;
@@ -419,7 +440,9 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       previousDisconnect?.();
       if (this.pendingBuild) {
         this.rejectPendingBuild(
-          new Error("Forge build failed: the Voxelize connection disconnected."),
+          new Error(
+            "Forge build failed: the Voxelize connection disconnected.",
+          ),
         );
       }
     };
@@ -437,16 +460,34 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     }
   }
 
-  /** Call after the page's Base Palette texture promises have completed. */
+  /** Call after the page's Builder Palette texture promises have completed. */
   markTextureReadinessComplete() {
     this.revision = this.readRevision();
-    this.textureReady = true;
+    try {
+      this.palette = parseForgeBuildPalette(
+        this.world.extraInitData.forgeBuildPalette,
+        (name) => this.world.getBlockByName(name),
+      );
+      this.paletteError = null;
+      this.textureReady = true;
+    } catch (error) {
+      this.palette = null;
+      this.textureReady = false;
+      this.paletteError =
+        error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   /** Register page-local tools after the world and texture gates are live. */
   async registerWhenReady(timeoutMs = 30_000): Promise<boolean> {
+    if (this.paletteError) {
+      if (this.agentMode) this.rejectAgentReady(this.paletteError);
+      return false;
+    }
     const ready = await this.waitUntil(
-      () => this.hasCoreReadiness() && this.observationChunksLoaded(this.playerAnchor()),
+      () =>
+        this.hasCoreReadiness() &&
+        this.observationChunksLoaded(this.playerAnchor()),
       timeoutMs,
     );
     if (!ready) {
@@ -458,12 +499,13 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     }
 
     this.resolveAgentReady();
-    const modelContext = (document as Document & { modelContext?: ModelContext })
-      .modelContext;
+    const modelContext = (
+      document as Document & { modelContext?: ModelContext }
+    ).modelContext;
     if (!modelContext?.registerTool || this.toolsRegistered) return false;
 
     try {
-      for (const tool of toolDefinitions(this)) {
+      for (const tool of toolDefinitions(this, this.requiredPalette())) {
         await modelContext.registerTool(tool);
       }
       this.toolsRegistered = true;
@@ -508,7 +550,9 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
 
     if (payload.requestId !== this.pendingBuild.requestId) {
       this.rejectPendingBuild(
-        new Error("Forge build failed: the server returned a mismatched requestId."),
+        new Error(
+          "Forge build failed: the server returned a mismatched requestId.",
+        ),
       );
       return;
     }
@@ -538,15 +582,22 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       spatialTarget: target,
       surfaceMap,
       obstacles,
+      availableBlocks: this.requiredPalette().blocks,
       worldRevision: this.revision,
     };
   }
 
-  async buildStructure(
-    input: unknown,
-    signal?: AbortSignal,
-  ): Promise<unknown> {
-    const parsed = parseBuildRequest(input);
+  async buildStructure(input: unknown, signal?: AbortSignal): Promise<unknown> {
+    if (!this.hasCoreReadiness()) {
+      throw new Error(
+        "Forge build unavailable: the page is disconnected, rejoining, outdated, or not Builder Palette-ready.",
+      );
+    }
+
+    const parsed = parseBuildRequest(
+      input,
+      paletteBlockNames(this.requiredPalette()),
+    );
     if ("error" in parsed) return parsed;
 
     const writes = expandBuildRequest(parsed);
@@ -560,11 +611,6 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       };
     }
 
-    if (!this.hasCoreReadiness()) {
-      throw new Error(
-        "Forge build unavailable: the page is disconnected, rejoining, outdated, or not texture-ready.",
-      );
-    }
     return this.dispatchBuild(parsed, writes, signal);
   }
 
@@ -585,7 +631,10 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
         elapsedMs: 0,
         revision: this.revision,
         persistence: "not_started",
-        error: { code: "busy", message: "Another Forge Build Request is active." },
+        error: {
+          code: "busy",
+          message: "Another Forge Build Request is active.",
+        },
       });
     }
 
@@ -660,7 +709,8 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       !this.network.isClientOutdated &&
       this.world.isInitialized &&
       this.hasForgeWorld() &&
-      this.textureReady
+      this.textureReady &&
+      this.palette !== null
     );
   }
 
@@ -668,6 +718,14 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     return Object.prototype.hasOwnProperty.call(
       this.world.extraInitData,
       "forgeRevision",
+    );
+  }
+
+  private requiredPalette() {
+    if (this.palette) return this.palette;
+    throw (
+      this.paletteError ??
+      new Error("Forge Builder Palette metadata is unavailable.")
     );
   }
 
@@ -737,7 +795,9 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     };
   }
 
-  private readSpatialTarget(playerPosition: VoxelPosition): ForgeContext["spatialTarget"] {
+  private readSpatialTarget(
+    playerPosition: VoxelPosition,
+  ): ForgeContext["spatialTarget"] {
     const target = this.voxelInteract.target;
     if (!target) return null;
 
@@ -780,8 +840,10 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
           height: surface?.y ?? null,
           topBlock: surface
             ? (() => {
-                const block = this.world.getBlockAt(surface.x, surface.y, surface.z);
-                return block && isCanonicalBlock(block.name) ? block.name : null;
+                return (
+                  this.world.getBlockAt(surface.x, surface.y, surface.z)
+                    ?.name ?? null
+                );
               })()
             : null,
         });
@@ -795,7 +857,7 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       for (let y = surface.y + 1; y <= surface.y + 24; y++) {
         const position = { x: surface.x, y, z: surface.z };
         const block = this.world.getBlockAt(position.x, position.y, position.z);
-        if (!block || block.isEmpty || !isCanonicalBlock(block.name)) continue;
+        if (!block || block.isEmpty) continue;
         const info = this.blockInfo(block, position);
         obstacles.push({
           position,
@@ -807,7 +869,11 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     return { surfaceMap, obstacles };
   }
 
-  private findSurface(targetY: number, x: number, z: number): VoxelPosition | null {
+  private findSurface(
+    targetY: number,
+    x: number,
+    z: number,
+  ): VoxelPosition | null {
     for (let y = targetY + 32; y >= targetY - 32; y--) {
       const block = this.world.getBlockAt(x, y, z);
       if (block && !block.isEmpty) return { x, y, z };
@@ -817,14 +883,17 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
 
   private blockInfo(
     block: {
-    id: number;
-    name: string;
-    isEmpty: boolean;
-    isFluid: boolean;
-    isPassable: boolean;
+      id: number;
+      name: string;
+      isEmpty: boolean;
+      isFluid: boolean;
+      isPassable: boolean;
     },
     position: VoxelPosition,
   ): ForgeBlockInfo {
+    const [rotation, yRotation] = BlockRotation.decode(
+      this.world.getVoxelRotationAt(position.x, position.y, position.z),
+    );
     return {
       id: block.id,
       name: block.name,
@@ -835,9 +904,8 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
         this.world.getVoxelWaterloggedAt(position.x, position.y, position.z),
       ),
       stage: this.world.getVoxelStageAt(position.x, position.y, position.z),
-      yRotation: BlockRotation.decode(
-        this.world.getVoxelRotationAt(position.x, position.y, position.z),
-      )[1],
+      rotation,
+      yRotation,
     };
   }
 
@@ -885,10 +953,12 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       facing: () => runtime.readPlayer().orientation,
       raycast: () => runtime.readSpatialTarget(runtime.readPlayer().position),
       blockAt: (position) => {
-        const block = runtime.world.getBlockAt(position.x, position.y, position.z);
-        return block && runtime.isKnownBlock(block.name)
-          ? runtime.blockInfo(block, position)
-          : null;
+        const block = runtime.world.getBlockAt(
+          position.x,
+          position.y,
+          position.z,
+        );
+        return block ? runtime.blockInfo(block, position) : null;
       },
       snapshot: async () => runtime.getAgentSnapshot(),
       connection: () => ({
@@ -908,12 +978,15 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
         loaded: () => runtime.loadedChunks(),
         pending: () => runtime.pendingChunks(),
         list: () => runtime.listChunks(),
-        waitForPaint: (options) => runtime.waitForPaint(options?.timeoutMs ?? 10_000),
+        waitForPaint: (options) =>
+          runtime.waitForPaint(options?.timeoutMs ?? 10_000),
       },
       call: (method, payload) => {
         if (method !== "forge:build") {
           return Promise.reject(
-            new Error(`Agent mode does not expose ${method} on the Forge page.`),
+            new Error(
+              `Agent mode does not expose ${method} on the Forge page.`,
+            ),
           );
         }
         return runtime.buildStructure(payload);
@@ -958,20 +1031,19 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     return query.get("agent") === "true" || query.get("testing") === "true";
   }
 
-  private isKnownBlock(name: string) {
-    return isCanonicalBlock(name);
-  }
-
   private chunkState(target: VoxelPosition | { cx: number; cz: number }) {
-    const { cx, cz } = "cx" in target
-      ? target
-      : {
-          cx: Math.floor(target.x / this.world.options.chunkSize),
-          cz: Math.floor(target.z / this.world.options.chunkSize),
-        };
+    const { cx, cz } =
+      "cx" in target
+        ? target
+        : {
+            cx: Math.floor(target.x / this.world.options.chunkSize),
+            cz: Math.floor(target.z / this.world.options.chunkSize),
+          };
     const chunk = this.world.getChunkByCoords(cx, cz);
     if (chunk?.isReady) return "loaded" as const;
-    return this.world.getChunkStatus(cx, cz) ? "pending" as const : "unloaded" as const;
+    return this.world.getChunkStatus(cx, cz)
+      ? ("pending" as const)
+      : ("unloaded" as const);
   }
 
   private async waitForChunks(
@@ -1016,14 +1088,18 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
   }
 
   private listChunks() {
-    const loaded = new Set(this.loadedChunks().map(({ cx, cz }) => `${cx},${cz}`));
-    const pending = new Set(this.pendingChunks().map(({ cx, cz }) => `${cx},${cz}`));
+    const loaded = new Set(
+      this.loadedChunks().map(({ cx, cz }) => `${cx},${cz}`),
+    );
+    const pending = new Set(
+      this.pendingChunks().map(({ cx, cz }) => `${cx},${cz}`),
+    );
     const all = new Set([...loaded, ...pending]);
     return [...all].map((name) => {
       const [cx, cz] = name.split(",").map(Number);
       return {
         coord: { cx, cz },
-        state: loaded.has(name) ? "loaded" as const : "pending" as const,
+        state: loaded.has(name) ? ("loaded" as const) : ("pending" as const),
       };
     });
   }
@@ -1046,7 +1122,9 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       if (quietFrames >= 2) {
         return { isSettled: true, elapsedMs: performance.now() - startedAt };
       }
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
     }
     return { isSettled: false, elapsedMs: performance.now() - startedAt };
   }

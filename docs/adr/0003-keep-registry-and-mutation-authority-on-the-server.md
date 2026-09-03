@@ -1,6 +1,6 @@
 # Keep registry and mutation authority on the server
 
-The Rust server owns stable block identities, block behavior, persistence, and all World Mutations. The browser decorates the server-provided Registry with Base Palette textures and exposes `get_player_context` and `build_structure`, but successful local rendering never substitutes for authoritative server application and read-back.
+The Rust server owns stable block identities, block behavior, persistence, and all World Mutations. The browser decorates the server-provided Registry with Builder Palette visuals and exposes `get_player_context` and `build_structure`, but successful local rendering never substitutes for authoritative server application and read-back.
 
 ## Consequences
 

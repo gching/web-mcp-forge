@@ -1,17 +1,7 @@
 export const MAX_BUILD_WRITES = 10_000;
 
-export const FORGE_BASE_PALETTE = [
-  "Air",
-  "Dirt",
-  "Stone",
-  "Grass Block",
-  "Grass",
-  "Oak Planks",
-  "Oak Log",
-  "Oak Leaves",
-] as const;
-
-export type ForgeBlockName = (typeof FORGE_BASE_PALETTE)[number];
+/** A name validated against the received Forge Builder Palette at parse time. */
+export type ForgeBlockName = string;
 export type VoxelPosition = { x: number; y: number; z: number };
 export type BuildStateProperties = Record<string, string | number | boolean>;
 
@@ -103,7 +93,9 @@ const parsePosition = (
     !isSafeInteger(value.y) ||
     !isSafeInteger(value.z)
   ) {
-    return invalid(`${label} must be an object containing three safe integers.`);
+    return invalid(
+      `${label} must be an object containing three safe integers.`,
+    );
   }
   return { x: value.x, y: value.y, z: value.z };
 };
@@ -137,15 +129,13 @@ const parseProperties = (
 const parseBlock = (
   value: unknown,
   label: string,
+  allowedBlockNames: ReadonlySet<string>,
 ): ForgeBlockName | InvalidBuildRequest => {
-  if (
-    typeof value === "string" &&
-    (FORGE_BASE_PALETTE as readonly string[]).includes(value)
-  ) {
-    return value as ForgeBlockName;
+  if (typeof value === "string" && allowedBlockNames.has(value)) {
+    return value;
   }
   return invalid(
-    `${label} must be one of the canonical Forge Base Palette block names.`,
+    `${label} must be a canonical Forge Builder Palette block name.`,
   );
 };
 
@@ -153,6 +143,7 @@ const parseRectangularOperation = (
   value: Record<string, unknown>,
   index: number,
   type: "fill" | "hollow_box",
+  allowedBlockNames: ReadonlySet<string>,
 ): BuildOperation | InvalidBuildRequest => {
   if (
     !hasOnly(value, ["type", "at", "size", "block", "properties"]) ||
@@ -167,7 +158,11 @@ const parseRectangularOperation = (
   if (size.x <= 0 || size.y <= 0 || size.z <= 0) {
     return invalid(`Operation ${index}.size must contain positive integers.`);
   }
-  const block = parseBlock(value.block, `Operation ${index}.block`);
+  const block = parseBlock(
+    value.block,
+    `Operation ${index}.block`,
+    allowedBlockNames,
+  );
   if (isRecord(block) && "error" in block) return block;
   const properties = parseProperties(
     value.properties,
@@ -186,6 +181,7 @@ const parseRectangularOperation = (
 const parseLineOperation = (
   value: Record<string, unknown>,
   index: number,
+  allowedBlockNames: ReadonlySet<string>,
 ): BuildOperation | InvalidBuildRequest => {
   if (
     !hasOnly(value, ["type", "from", "to", "block", "properties"]) ||
@@ -197,7 +193,11 @@ const parseLineOperation = (
   if ("error" in from) return from;
   const to = parsePosition(value.to, `Operation ${index}.to`);
   if ("error" in to) return to;
-  const block = parseBlock(value.block, `Operation ${index}.block`);
+  const block = parseBlock(
+    value.block,
+    `Operation ${index}.block`,
+    allowedBlockNames,
+  );
   if (isRecord(block) && "error" in block) return block;
   const properties = parseProperties(
     value.properties,
@@ -216,6 +216,7 @@ const parseLineOperation = (
 const parseVoxelsOperation = (
   value: Record<string, unknown>,
   index: number,
+  allowedBlockNames: ReadonlySet<string>,
 ): BuildOperation | InvalidBuildRequest => {
   if (
     !hasOnly(value, ["type", "blocks"]) ||
@@ -231,10 +232,7 @@ const parseVoxelsOperation = (
   const blocks: BuildVoxel[] = [];
   for (let blockIndex = 0; blockIndex < value.blocks.length; blockIndex++) {
     const source = value.blocks[blockIndex];
-    if (
-      !isRecord(source) ||
-      !hasOnly(source, ["at", "block", "properties"])
-    ) {
+    if (!isRecord(source) || !hasOnly(source, ["at", "block", "properties"])) {
       return invalid(
         `Operation ${index}.blocks[${blockIndex}] contains unsupported fields.`,
       );
@@ -247,6 +245,7 @@ const parseVoxelsOperation = (
     const block = parseBlock(
       source.block,
       `Operation ${index}.blocks[${blockIndex}].block`,
+      allowedBlockNames,
     );
     if (isRecord(block) && "error" in block) return block;
     const properties = parseProperties(
@@ -265,7 +264,11 @@ const parseVoxelsOperation = (
 
 export const parseBuildRequest = (
   input: unknown,
+  allowedBlockNames: ReadonlySet<string>,
 ): BuildRequest | InvalidBuildRequest => {
+  if (allowedBlockNames.size === 0) {
+    return invalid("Forge Builder Palette names are unavailable.");
+  }
   if (
     !isRecord(input) ||
     !hasOnly(input, ["origin", "operations"]) ||
@@ -290,11 +293,16 @@ export const parseBuildRequest = (
     }
     const parsed =
       operation.type === "fill" || operation.type === "hollow_box"
-        ? parseRectangularOperation(operation, index, operation.type)
+        ? parseRectangularOperation(
+            operation,
+            index,
+            operation.type,
+            allowedBlockNames,
+          )
         : operation.type === "line"
-          ? parseLineOperation(operation, index)
+          ? parseLineOperation(operation, index, allowedBlockNames)
           : operation.type === "voxels"
-            ? parseVoxelsOperation(operation, index)
+            ? parseVoxelsOperation(operation, index, allowedBlockNames)
             : invalid(`Operation ${index} has an unsupported type.`);
     if ("error" in parsed) return parsed;
     operations.push(parsed);

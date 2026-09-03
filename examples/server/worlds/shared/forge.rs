@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 use specs::{ReadExpect, System, WriteExpect};
 
+use crate::registry::forge_build_palette;
 use voxelize::{
     BlockRotation, Chunks, ClientFilter, Message, MessageQueues, MessageType, MethodProtocol,
     Registry, Vec2, Vec3, VoxelAccess, VoxelPacker, World, WorldConfig,
@@ -13,17 +14,6 @@ use voxelize::{
 const MAX_BUILD_WRITES: usize = 10_000;
 const BUILD_BATCH_SIZE: usize = 128;
 const REVISION_FILE: &str = "forge-revision.json";
-
-const BASE_PALETTE: [&str; 8] = [
-    "Air",
-    "Dirt",
-    "Stone",
-    "Grass Block",
-    "Grass",
-    "Oak Planks",
-    "Oak Log",
-    "Oak Leaves",
-];
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -154,6 +144,14 @@ pub fn setup_forge_world(world: &mut World) {
     world.ecs_mut().insert(state);
     world.set_extra_init_data_provider("forgeRevision", |world| {
         serde_json::json!(current_revision(world))
+    });
+    world.set_extra_init_data_provider("forgeBuildPalette", |world| {
+        let registry = world.registry();
+        serde_json::to_value(
+            forge_build_palette(&registry)
+                .expect("Forge Builder Palette must validate against the server Registry"),
+        )
+        .expect("Forge Builder Palette must serialize into join metadata")
     });
     world.set_method_handle("forge:build", handle_build);
 }
@@ -456,9 +454,11 @@ fn resolve_block(
     properties: &Map<String, Value>,
     registry: &Registry,
 ) -> Result<u32, String> {
-    if !BASE_PALETTE.contains(&name) {
+    let palette = forge_build_palette(registry)
+        .map_err(|error| format!("Forge Builder Palette is unavailable: {error}"))?;
+    if !palette.blocks.iter().any(|entry| entry.name == name) {
         return Err(format!(
-            "block {name:?} is not a canonical Forge Base Palette name."
+            "block {name:?} is not a canonical Forge Builder Palette name."
         ));
     }
     let block = registry
@@ -971,4 +971,46 @@ fn send_queued_result(queue: &mut MessageQueues, client_id: &str, payload: Value
             .build(),
         ClientFilter::Direct(client_id.to_owned()),
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::{Map, Value};
+
+    use super::{resolve_block, BlockRotation, VoxelPacker};
+
+    #[test]
+    fn resolve_block_accepts_new_builder_materials_and_rotated_logs() {
+        let registry = crate::registry::setup_registry();
+
+        for name in [
+            "Glass",
+            "Oak Slab Top",
+            "Blue Concrete",
+            "Ember Lamp",
+            "Azure Lamp",
+        ] {
+            assert!(
+                resolve_block(name, &Map::new(), &registry).is_ok(),
+                "{name} must be accepted by the Forge Builder Palette"
+            );
+        }
+
+        let properties = Map::from_iter([("rotation".to_owned(), Value::String("PX".to_owned()))]);
+        assert_eq!(
+            resolve_block("Oak Log", &properties, &registry).unwrap(),
+            VoxelPacker::new()
+                .with_id(43)
+                .with_rotation(BlockRotation::encode(2, 0))
+                .pack()
+        );
+    }
+
+    #[test]
+    fn resolve_block_rejects_excluded_registry_blocks() {
+        let error = resolve_block("Water", &Map::new(), &crate::registry::setup_registry())
+            .expect_err("Water must remain outside the Forge Builder Palette");
+
+        assert!(error.contains("Palette"));
+    }
 }
