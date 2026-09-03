@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use serde::Serialize;
 use voxelize::{
     AABBServerExt, Block, BlockConditionalPart, BlockDynamicPattern, BlockFaces, BlockRule,
     BlockRuleLogic, BlockSimpleRule, Registry, Vec3, VoxelPacker, YRotatableSegments, AABB,
@@ -6,64 +9,197 @@ use voxelize::{
 
 const PLANT_SCALE: f32 = 0.6;
 
-/// The Forge MVP contract is intentionally narrower than the legacy example
-/// catalog below. Keep this whitelist separate so the original client can
-/// continue to use its existing block IDs and rendering showcase.
+/// The server-owned Builder Palette policy intentionally remains narrower
+/// than the legacy example catalog below. Its order is a public join-metadata
+/// contract, while IDs and state capabilities come from the Registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ForgeMvpBlock {
+pub struct ForgeBuilderPaletteEntry {
     pub name: &'static str,
-    pub id: u32,
+    pub category: &'static str,
 }
 
-pub const FORGE_MVP_BLOCKS: [ForgeMvpBlock; 8] = [
-    ForgeMvpBlock { name: "Air", id: 0 },
-    ForgeMvpBlock {
+pub const FORGE_BUILDER_PALETTE: [ForgeBuilderPaletteEntry; 27] = [
+    ForgeBuilderPaletteEntry {
+        name: "Air",
+        category: "utility",
+    },
+    ForgeBuilderPaletteEntry {
         name: "Dirt",
-        id: 1,
+        category: "terrain",
     },
-    ForgeMvpBlock {
-        name: "Stone",
-        id: 2,
-    },
-    ForgeMvpBlock {
+    ForgeBuilderPaletteEntry {
         name: "Grass Block",
-        id: 4,
+        category: "terrain",
     },
-    ForgeMvpBlock {
+    ForgeBuilderPaletteEntry {
         name: "Grass",
-        id: 1000,
+        category: "terrain",
     },
-    ForgeMvpBlock {
+    ForgeBuilderPaletteEntry {
+        name: "Sand",
+        category: "terrain",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Snow",
+        category: "terrain",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Stone",
+        category: "stone",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Granite",
+        category: "stone",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Graphite",
+        category: "stone",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Marble",
+        category: "stone",
+    },
+    ForgeBuilderPaletteEntry {
         name: "Oak Planks",
-        id: 40,
+        category: "wood",
     },
-    ForgeMvpBlock {
+    ForgeBuilderPaletteEntry {
+        name: "Oak Slab Top",
+        category: "wood",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Oak Slab Bottom",
+        category: "wood",
+    },
+    ForgeBuilderPaletteEntry {
         name: "Oak Log",
-        id: 43,
+        category: "wood",
     },
-    ForgeMvpBlock {
+    ForgeBuilderPaletteEntry {
         name: "Oak Leaves",
-        id: 44,
+        category: "wood",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Birch Log",
+        category: "wood",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Glass",
+        category: "detail",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Ivory Block",
+        category: "detail",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "White Concrete",
+        category: "color",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Black Concrete",
+        category: "color",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Red Concrete",
+        category: "color",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Blue Concrete",
+        category: "color",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Yellow Concrete",
+        category: "color",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Orange Concrete",
+        category: "color",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Torch",
+        category: "lighting",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Ember Lamp",
+        category: "lighting",
+    },
+    ForgeBuilderPaletteEntry {
+        name: "Azure Lamp",
+        category: "lighting",
     },
 ];
 
-/// Validate the stable Forge MVP names and IDs without constraining the
-/// legacy catalog used by the original fork client.
-pub fn validate_forge_mvp_registry(registry: &Registry) -> Result<(), String> {
-    for expected in FORGE_MVP_BLOCKS {
-        let Some(block) = registry.try_get_block_by_name(expected.name) else {
-            return Err(format!("Forge MVP block is missing: {}", expected.name));
-        };
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgeBuildPalette {
+    pub blocks: Vec<ForgeBuildPaletteBlock>,
+}
 
-        if block.id != expected.id {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgeBuildPaletteBlock {
+    pub id: u32,
+    pub name: String,
+    pub category: String,
+    pub capabilities: ForgeBuildPaletteCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgeBuildPaletteCapabilities {
+    /// Forge preserves its existing packed 0-through-15 stage property.
+    pub stage: bool,
+    pub rotation: bool,
+    pub y_rotation: bool,
+}
+
+/// Derive the join payload from the authoritative Registry. The static list
+/// is only product policy; a typo, duplicate, or Registry drift prevents the
+/// Forge World from publishing misleading metadata.
+pub fn forge_build_palette(registry: &Registry) -> Result<ForgeBuildPalette, String> {
+    let mut names = HashSet::with_capacity(FORGE_BUILDER_PALETTE.len());
+    let mut ids = HashSet::with_capacity(FORGE_BUILDER_PALETTE.len());
+    let mut blocks = Vec::with_capacity(FORGE_BUILDER_PALETTE.len());
+
+    for entry in FORGE_BUILDER_PALETTE {
+        if !names.insert(entry.name) {
             return Err(format!(
-                "Forge MVP block {} has ID {}, expected {}",
-                expected.name, block.id, expected.id
+                "Forge Builder Palette contains duplicate block name: {}",
+                entry.name
             ));
         }
+
+        let Some(block) = registry.try_get_block_by_name(entry.name) else {
+            return Err(format!(
+                "Forge Builder Palette block is missing from the Registry: {}",
+                entry.name
+            ));
+        };
+
+        if !ids.insert(block.id) {
+            return Err(format!(
+                "Forge Builder Palette contains duplicate Registry block ID: {}",
+                block.id
+            ));
+        };
+
+        blocks.push(ForgeBuildPaletteBlock {
+            id: block.id,
+            name: block.name.clone(),
+            category: entry.category.to_owned(),
+            capabilities: ForgeBuildPaletteCapabilities {
+                stage: true,
+                rotation: block.rotatable,
+                y_rotation: block.y_rotatable,
+            },
+        });
     }
 
-    Ok(())
+    if blocks.is_empty() {
+        return Err("Forge Builder Palette cannot be empty.".to_owned());
+    }
+
+    Ok(ForgeBuildPalette { blocks })
 }
 
 pub fn setup_registry() -> Registry {
@@ -693,13 +829,56 @@ pub fn setup_registry() -> Registry {
 
 #[cfg(test)]
 mod tests {
-    use super::{setup_registry, validate_forge_mvp_registry, FORGE_MVP_BLOCKS};
+    use serde_json::json;
+
+    use super::{forge_build_palette, setup_registry, FORGE_BUILDER_PALETTE};
 
     #[test]
-    fn forge_mvp_whitelist_validates_without_reducing_legacy_catalog() {
+    fn builder_palette_serializes_the_exact_authoritative_27_blocks_in_order() {
+        let palette = forge_build_palette(&setup_registry())
+            .expect("Builder Palette must resolve from the Registry");
+
+        assert_eq!(
+            serde_json::to_value(palette).expect("Builder Palette must serialize"),
+            json!({
+                "blocks": [
+                    { "id": 0, "name": "Air", "category": "utility", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 1, "name": "Dirt", "category": "terrain", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 4, "name": "Grass Block", "category": "terrain", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 1000, "name": "Grass", "category": "terrain", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 3, "name": "Sand", "category": "terrain", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 5, "name": "Snow", "category": "terrain", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 2, "name": "Stone", "category": "stone", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 21, "name": "Granite", "category": "stone", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 22, "name": "Graphite", "category": "stone", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 60, "name": "Marble", "category": "stone", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 40, "name": "Oak Planks", "category": "wood", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 41, "name": "Oak Slab Top", "category": "wood", "capabilities": { "stage": true, "rotation": true, "yRotation": false } },
+                    { "id": 42, "name": "Oak Slab Bottom", "category": "wood", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 43, "name": "Oak Log", "category": "wood", "capabilities": { "stage": true, "rotation": true, "yRotation": false } },
+                    { "id": 44, "name": "Oak Leaves", "category": "wood", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 46, "name": "Birch Log", "category": "wood", "capabilities": { "stage": true, "rotation": true, "yRotation": false } },
+                    { "id": 160, "name": "Glass", "category": "detail", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 100, "name": "Ivory Block", "category": "detail", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 83, "name": "White Concrete", "category": "color", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 85, "name": "Black Concrete", "category": "color", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 82, "name": "Red Concrete", "category": "color", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 81, "name": "Blue Concrete", "category": "color", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 84, "name": "Yellow Concrete", "category": "color", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 80, "name": "Orange Concrete", "category": "color", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 30, "name": "Torch", "category": "lighting", "capabilities": { "stage": true, "rotation": true, "yRotation": false } },
+                    { "id": 31, "name": "Ember Lamp", "category": "lighting", "capabilities": { "stage": true, "rotation": false, "yRotation": false } },
+                    { "id": 32, "name": "Azure Lamp", "category": "lighting", "capabilities": { "stage": true, "rotation": false, "yRotation": false } }
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn builder_palette_remains_narrower_than_the_legacy_catalog() {
         let registry = setup_registry();
 
-        validate_forge_mvp_registry(&registry).expect("Forge MVP blocks must remain stable");
-        assert!(registry.blocks_by_name.len() > FORGE_MVP_BLOCKS.len());
+        assert_eq!(forge_build_palette(&registry).unwrap().blocks.len(), 27);
+        assert!(registry.blocks_by_name.len() > FORGE_BUILDER_PALETTE.len());
     }
 }
