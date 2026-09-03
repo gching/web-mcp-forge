@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust/serde/voxelize Registry; TypeScript/Vitest/JSON Schema; Vite example client; visible Codex in-app Browser; pnpm and cargo.
 
-**Spec:** User-delegated Forge Builder Palette contract, 2026-09-03.
+**Spec:** Builder Palette contract tracked by [gching/web-mcp-forge#1](https://github.com/gching/web-mcp-forge/issues/1), delegated by the user on 2026-09-03.
 
 ## Global Constraints
 
@@ -296,7 +296,7 @@ git commit -m "feat(forge): report Builder Palette and all observed blocks"
 
 Replace the former palette language with Builder Palette terms and the exact contract. Preserve terminology for Build Request, Registry, Player Context, World Mutation, and Texture Readiness.
 
-- [ ] **Step 2: Run complete static verification**
+- [x] **Step 2: Run complete static verification**
 
 Run: `cargo test --example demo`
 
