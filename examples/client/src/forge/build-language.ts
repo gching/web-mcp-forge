@@ -359,6 +359,8 @@ const addRectangularWrites = (
   }
 };
 
+// 3D Bresenham is dominant-axis based; ties are resolved x, then y, then z.
+// Both client preflight and the authoritative Rust executor use this order.
 const addLineWrites = (
   writes: ExpandedBuildWrite[],
   operationIndex: number,

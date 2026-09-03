@@ -6,8 +6,8 @@ use serde_json::{Map, Value};
 use specs::{ReadExpect, System, WriteExpect};
 
 use voxelize::{
-    BlockRotation, BlockUtils, Chunks, ClientFilter, Message, MessageQueues, MessageType,
-    MethodProtocol, Registry, Vec2, Vec3, VoxelAccess, VoxelPacker, World, WorldConfig,
+    BlockRotation, Chunks, ClientFilter, Message, MessageQueues, MessageType, MethodProtocol,
+    Registry, Vec2, Vec3, VoxelAccess, VoxelPacker, World, WorldConfig,
 };
 
 const MAX_BUILD_WRITES: usize = 10_000;
@@ -601,6 +601,8 @@ fn append_write(
     Ok(())
 }
 
+// Keep this in lockstep with the page expansion: dominant-axis Bresenham,
+// resolving equal axes in x, then y, then z order.
 #[allow(clippy::too_many_arguments)]
 fn append_line(
     writes: &mut Vec<ResolvedWrite>,
