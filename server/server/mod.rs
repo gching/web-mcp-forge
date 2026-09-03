@@ -1075,12 +1075,8 @@ impl Server {
             .level_for("webrtc_mdns", log::LevelFilter::Warn)
             .level_for("webrtc_util", log::LevelFilter::Warn)
             .chain(std::io::stdout())
-            // A host may construct more than one server over its lifetime
-            // (for example, a stop/restart persistence test). The process
-            // logger is global, so a later server must keep the existing
-            // logger instead of treating SetLoggerError as a boot failure.
             .apply()
-            .ok();
+            .expect("Fern did not run successfully");
     }
 
     pub fn set_action_handle<F: Fn(Value, &mut Server) + 'static>(
