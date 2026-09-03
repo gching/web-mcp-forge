@@ -19,9 +19,11 @@ import {
   BOT_SCALE,
   BACKEND_SERVER,
   NETWORK_SECRET,
-  VOXELIZE_LOCALSTORAGE_KEY,
 } from "./config/constants";
-import { resolveWorldName } from "./config/world-selection";
+import {
+  resolveWorldName,
+  WORLD_SELECTION_STORAGE_KEY,
+} from "./config/world-selection";
 import { Map } from "./map";
 import { ForgeRuntime } from "./forge/runtime";
 import { setupWorld } from "./world";
@@ -1432,7 +1434,7 @@ network.register(forgeRuntime);
 /* -------------------------------------------------------------------------- */
 const currentWorldName = resolveWorldName(
   window.location.search,
-  localStorage.getItem(VOXELIZE_LOCALSTORAGE_KEY),
+  localStorage.getItem(WORLD_SELECTION_STORAGE_KEY),
 );
 
 class Box extends VOXELIZE.Entity<{
@@ -1985,7 +1987,7 @@ const start = async () => {
   gui
     .add({ world: currentWorldName }, "world", ["terrain", "flat", "test"])
     .onChange((worldName: string) => {
-      localStorage.setItem(VOXELIZE_LOCALSTORAGE_KEY, worldName);
+      localStorage.setItem(WORLD_SELECTION_STORAGE_KEY, worldName);
       window.location.reload();
     });
 
