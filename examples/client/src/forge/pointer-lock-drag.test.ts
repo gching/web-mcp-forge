@@ -62,6 +62,28 @@ const createControls = () => {
 };
 
 describe("installPointerLockDragFallback", () => {
+  it("activates the in-game input namespace when fallback turns on", () => {
+    const canvas = new TestCanvas();
+    const { controls, emitPointerLockError } = createControls();
+    const inputNamespace = {
+      current: "menu",
+      setNamespace(namespace: "menu" | "in-game") {
+        this.current = namespace;
+      },
+    };
+
+    installPointerLockDragFallback({
+      canvas: canvas as never,
+      controls,
+      inputNamespace,
+      onFallback: vi.fn(),
+      windowTarget: new EventTarget() as never,
+    });
+    emitPointerLockError(new Error("unavailable"));
+
+    expect(inputNamespace.current).toBe("in-game");
+  });
+
   it("persists after failure and routes primary-pointer drags through shared look controls", () => {
     const canvas = new TestCanvas();
     const windowTarget = new EventTarget();
@@ -70,6 +92,7 @@ describe("installPointerLockDragFallback", () => {
     const fallback = installPointerLockDragFallback({
       canvas: canvas as never,
       controls,
+      inputNamespace: { setNamespace: vi.fn() },
       onFallback,
       windowTarget: windowTarget as never,
     });
@@ -113,6 +136,7 @@ describe("installPointerLockDragFallback", () => {
     const fallback = installPointerLockDragFallback({
       canvas: canvas as never,
       controls,
+      inputNamespace: { setNamespace: vi.fn() },
       onFallback: vi.fn(),
       windowTarget: windowTarget as never,
     });

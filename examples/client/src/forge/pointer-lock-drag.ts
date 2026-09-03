@@ -15,11 +15,13 @@ export type PointerLockDragFallback = {
 export const installPointerLockDragFallback = ({
   canvas,
   controls,
+  inputNamespace,
   onFallback,
   windowTarget = window,
 }: {
   canvas: HTMLCanvasElement;
   controls: PointerLockDragControls;
+  inputNamespace: { setNamespace(namespace: "in-game"): void };
   onFallback: () => void;
   windowTarget?: Window;
 }): PointerLockDragFallback => {
@@ -38,6 +40,7 @@ export const installPointerLockDragFallback = ({
     if (active) return;
     active = true;
     controls.setInputActive(true);
+    inputNamespace.setNamespace("in-game");
     onFallback();
   };
 

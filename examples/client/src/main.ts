@@ -167,6 +167,7 @@ let pointerLockHintTimeout: number | undefined;
 installPointerLockDragFallback({
   canvas,
   controls,
+  inputNamespace: inputs,
   onFallback: () => {
     pointerLockHint.hidden = false;
     window.clearTimeout(pointerLockHintTimeout);
