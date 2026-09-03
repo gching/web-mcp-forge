@@ -10,6 +10,7 @@ node_modules
 client/protocol/index.*
 Cargo.lock
 **/Cargo.lock
+!/Cargo.lock
 .vscode
 **/*/.DS_Store
 
