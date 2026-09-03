@@ -314,14 +314,14 @@ Run: `cd examples/client && pnpm build`
 
 Expected: exit 0.
 
-- [ ] **Step 3: Commit documentation and plan progress**
+- [x] **Step 3: Commit documentation and plan progress**
 
 ```bash
 git add CONTEXT.md docs/adr/0004-reuse-the-chatgpt-site-arbitrary-building-contract.md docs/superpowers/plans/2026-09-03-forge-builder-palette.md
 git commit -m "docs(forge): specify Builder Palette contract"
 ```
 
-- [ ] **Step 4: Perform independent two-axis review and repair valid findings**
+- [x] **Step 4: Perform independent two-axis review and repair valid findings**
 
 Compare `HEAD` with starting commit `3c1f6fbdb`; inspect documented standards plus the user-delegated Builder Palette requirements separately. Fix any valid critical or important finding, rerun every affected focused test and the complete verification suite, and commit the repair.
 
@@ -329,7 +329,9 @@ Compare `HEAD` with starting commit `3c1f6fbdb`; inspect documented standards pl
 
 Run `pnpm demo`; use only visible Codex in-app Browser at `http://localhost:3000`. Enter the flat Forge World and verify exactly two tools; inspect 27 names/dynamic schema and Player Context categories/capabilities. Build a persisted mixed material structure with Glass, slabs, concrete, lights, and rotated logs; assert resulting blocks/rotations through the agent bridge; submit excluded Water and assert zero applied writes; reload the visible browser and reassert blocks, rotations, and revision. Keep a second participant only if the demo exposes one, then stop only task-started processes.
 
-- [ ] **Step 6: Final clean-worktree evidence**
+**Status:** BLOCKED on 2026-09-03. The required ports 3000 and 4000 are held by a separately launched demo in `/Users/gching/.codex/worktrees/2021/forge-observer-controls-voxelize`; this worktree neither reused nor stopped those processes.
+
+- [x] **Step 6: Final clean-worktree evidence**
 
 Run: `git status --short && git log --oneline 3c1f6fbdb..HEAD`
 
