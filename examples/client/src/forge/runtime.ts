@@ -407,6 +407,7 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     const previousJoin = network.onJoin;
     network.onJoin = (worldName) => {
       previousJoin?.(worldName);
+      this.revision = this.readRevision();
       if (this.pendingBuild) {
         this.rejectPendingBuild(
           new Error("Forge build failed: the Voxelize session rejoined."),
@@ -658,7 +659,15 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       !this.network.isJoinPending &&
       !this.network.isClientOutdated &&
       this.world.isInitialized &&
+      this.hasForgeWorld() &&
       this.textureReady
+    );
+  }
+
+  private hasForgeWorld() {
+    return Object.prototype.hasOwnProperty.call(
+      this.world.extraInitData,
+      "forgeRevision",
     );
   }
 
