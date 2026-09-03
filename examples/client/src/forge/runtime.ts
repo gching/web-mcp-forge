@@ -808,11 +808,7 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
   }
 
   private findSurface(targetY: number, x: number, z: number): VoxelPosition | null {
-    for (let y = targetY; y >= targetY - 32; y--) {
-      const block = this.world.getBlockAt(x, y, z);
-      if (block && !block.isEmpty) return { x, y, z };
-    }
-    for (let y = targetY + 1; y <= targetY + 32; y++) {
+    for (let y = targetY + 32; y >= targetY - 32; y--) {
       const block = this.world.getBlockAt(x, y, z);
       if (block && !block.isEmpty) return { x, y, z };
     }
@@ -894,7 +890,7 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
           ? runtime.blockInfo(block, position)
           : null;
       },
-      snapshot: () => runtime.getAgentSnapshot(),
+      snapshot: async () => runtime.getAgentSnapshot(),
       connection: () => ({
         isConnected: runtime.network.connected,
         isJoined: runtime.network.joined,

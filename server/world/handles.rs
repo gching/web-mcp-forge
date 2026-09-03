@@ -67,6 +67,19 @@ impl World {
         self.extra_init_data.insert(key.to_owned(), value);
     }
 
+    /// Registers init data evaluated when a client joins, after any ECS systems
+    /// have updated the world state it depends on.
+    pub fn set_extra_init_data_provider<
+        F: Fn(&World) -> serde_json::Value + Send + Sync + 'static,
+    >(
+        &mut self,
+        key: &str,
+        provider: F,
+    ) {
+        self.extra_init_data_providers
+            .insert(key.to_owned(), Arc::new(provider));
+    }
+
     pub fn set_item_registry(&mut self, registry: ItemRegistry) {
         self.items = Some(registry);
     }

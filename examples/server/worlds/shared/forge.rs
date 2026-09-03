@@ -151,8 +151,10 @@ impl ForgeBuildState {
 pub fn setup_forge_world(world: &mut World) {
     let config = (*world.config()).clone();
     let state = ForgeBuildState::load(&config);
-    world.set_extra_init_data("forgeRevision", serde_json::json!(state.revision));
     world.ecs_mut().insert(state);
+    world.set_extra_init_data_provider("forgeRevision", |world| {
+        serde_json::json!(current_revision(world))
+    });
     world.set_method_handle("forge:build", handle_build);
 }
 
@@ -292,7 +294,7 @@ fn preflight(
                 }
                 let block = resolve_block(block, properties, registry)?;
                 let is_hollow = matches!(operation, BuildOperation::HollowBox { .. });
-                checked_shape_count(size, is_hollow)?;
+                checked_shape_count(&size, is_hollow)?;
                 let mut emitted = 0usize;
                 for x in 0..size.0 {
                     for y in 0..size.1 {
@@ -311,7 +313,7 @@ fn preflight(
                                 &mut affected_chunks,
                                 &mut affected_seen,
                                 &mut bounds,
-                                origin,
+                                &origin,
                                 Vec3(
                                     at.0.checked_add(x).ok_or_else(|| {
                                         format!("operation {operation_index}.at plus x overflowed.")
@@ -365,7 +367,7 @@ fn preflight(
                     &mut affected_chunks,
                     &mut affected_seen,
                     &mut bounds,
-                    origin,
+                    &origin,
                     from,
                     to,
                     operation_index,
@@ -391,7 +393,7 @@ fn preflight(
                         &mut affected_chunks,
                         &mut affected_seen,
                         &mut bounds,
-                        origin,
+                        &origin,
                         at,
                         operation_index,
                         block,
@@ -427,7 +429,7 @@ fn checked_position(position: &Position, label: &str) -> Result<Vec3<i32>, Strin
     ))
 }
 
-fn checked_shape_count(size: Vec3<i32>, hollow: bool) -> Result<usize, String> {
+fn checked_shape_count(size: &Vec3<i32>, hollow: bool) -> Result<usize, String> {
     let total = (size.0 as u64)
         .checked_mul(size.1 as u64)
         .and_then(|value| value.checked_mul(size.2 as u64))
@@ -535,7 +537,7 @@ fn append_write(
     affected_chunks: &mut Vec<Vec2<i32>>,
     affected_seen: &mut HashSet<Vec2<i32>>,
     bounds: &mut Option<BuildBounds>,
-    origin: Vec3<i32>,
+    origin: &Vec3<i32>,
     relative: Vec3<i32>,
     operation_index: usize,
     raw: u32,
@@ -582,15 +584,15 @@ fn append_write(
             ));
         }
     }
-    if affected_seen.insert(chunk) {
+    if affected_seen.insert(chunk.clone()) {
         affected_chunks.push(chunk);
     }
     if let Some(current) = bounds {
         current.include(&position);
     } else {
         *bounds = Some(BuildBounds {
-            min: position,
-            max: position,
+            min: position.clone(),
+            max: position.clone(),
         });
     }
     writes.push(ResolvedWrite {
@@ -609,7 +611,7 @@ fn append_line(
     affected_chunks: &mut Vec<Vec2<i32>>,
     affected_seen: &mut HashSet<Vec2<i32>>,
     bounds: &mut Option<BuildBounds>,
-    origin: Vec3<i32>,
+    origin: &Vec3<i32>,
     from: Vec3<i32>,
     to: Vec3<i32>,
     operation_index: usize,
@@ -798,7 +800,7 @@ impl<'a> System<'a> for ForgeBuildSystem {
                     "requested": job.requested,
                     "expanded": job.writes.len(),
                     "applied": job.applied,
-                    "bounds": bounds_value(bounds_for_applied(&job)),
+                    "bounds": bounds_value(bounds_for_applied(&job).as_ref()),
                     "elapsedMs": job.started.elapsed().as_millis(),
                     "revision": state.revision,
                     "persistence": "not_reached",
@@ -867,12 +869,12 @@ impl<'a> System<'a> for ForgeBuildSystem {
         chunks.update_voxels(
             &job.writes[start..end]
                 .iter()
-                .map(|write| (write.position, write.raw))
+                .map(|write| (write.position.clone(), write.raw))
                 .collect::<Vec<_>>(),
         );
         let mut expected = HashMap::new();
         for write in &job.writes[start..end] {
-            expected.insert(write.position, write.raw);
+            expected.insert(write.position.clone(), write.raw);
         }
         job.next = end;
         job.awaiting_commit = Some((start, end, expected.into_iter().collect(), Instant::now()));
@@ -912,14 +914,14 @@ fn bounds_value(bounds: Option<&BuildBounds>) -> Value {
 }
 
 fn bounds_for_applied(job: &BuildJob) -> Option<BuildBounds> {
-    let mut bounds = None;
+    let mut bounds: Option<BuildBounds> = None;
     for write in job.writes.iter().take(job.applied) {
         if let Some(current) = &mut bounds {
             current.include(&write.position);
         } else {
             bounds = Some(BuildBounds {
-                min: write.position,
-                max: write.position,
+                min: write.position.clone(),
+                max: write.position.clone(),
             });
         }
     }

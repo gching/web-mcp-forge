@@ -83,6 +83,9 @@ const invalid = (message: string): InvalidBuildRequest => ({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isInvalidBuildRequest = (value: unknown): value is InvalidBuildRequest =>
+  isRecord(value) && value.ok === false && isRecord(value.error);
+
 const isSafeInteger = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value);
 
@@ -165,12 +168,12 @@ const parseRectangularOperation = (
     return invalid(`Operation ${index}.size must contain positive integers.`);
   }
   const block = parseBlock(value.block, `Operation ${index}.block`);
-  if ("error" in block) return block;
+  if (isRecord(block) && "error" in block) return block;
   const properties = parseProperties(
     value.properties,
     `Operation ${index}.properties`,
   );
-  if (properties && "error" in properties) return properties;
+  if (isInvalidBuildRequest(properties)) return properties;
   return {
     type,
     at,
@@ -195,12 +198,12 @@ const parseLineOperation = (
   const to = parsePosition(value.to, `Operation ${index}.to`);
   if ("error" in to) return to;
   const block = parseBlock(value.block, `Operation ${index}.block`);
-  if ("error" in block) return block;
+  if (isRecord(block) && "error" in block) return block;
   const properties = parseProperties(
     value.properties,
     `Operation ${index}.properties`,
   );
-  if (properties && "error" in properties) return properties;
+  if (isInvalidBuildRequest(properties)) return properties;
   return {
     type: "line",
     from,
@@ -245,12 +248,12 @@ const parseVoxelsOperation = (
       source.block,
       `Operation ${index}.blocks[${blockIndex}].block`,
     );
-    if ("error" in block) return block;
+    if (isRecord(block) && "error" in block) return block;
     const properties = parseProperties(
       source.properties,
       `Operation ${index}.blocks[${blockIndex}].properties`,
     );
-    if (properties && "error" in properties) return properties;
+    if (isInvalidBuildRequest(properties)) return properties;
     blocks.push({
       at,
       block,

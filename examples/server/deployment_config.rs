@@ -21,7 +21,9 @@ impl DeploymentConfig {
             .filter(|port| *port != 0)
             .ok_or_else(|| "PORT must be an integer from 1 through 65535".to_owned())?;
 
-        let secret = lookup("VOXELIZE_SECRET").unwrap_or_else(|| "test".to_owned());
+        let secret = lookup("VOXELIZE_SECRET").unwrap_or_else(|| {
+            "sadaddsdsadsadsadsadsadsadsadsadsaadsdsd212321sadghfhhey54t34dfsfsdfs".to_owned()
+        });
         if secret.trim().is_empty() {
             return Err("VOXELIZE_SECRET must not be blank".to_owned());
         }

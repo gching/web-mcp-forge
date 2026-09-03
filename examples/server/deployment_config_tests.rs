@@ -20,7 +20,10 @@ fn missing_environment_uses_local_demo_defaults() {
     let config = DeploymentConfig::from_lookup(|_| None).expect("local defaults");
 
     assert_eq!(config.port, 4_000);
-    assert_eq!(config.secret, "test");
+    assert_eq!(
+        config.secret,
+        "sadaddsdsadsadsadsadsadsadsadsadsaadsdsd212321sadghfhhey54t34dfsfsdfs"
+    );
     assert_eq!(config.world_save_dir("test"), "data/worlds/test");
 }
 

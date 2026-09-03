@@ -376,6 +376,9 @@ impl World {
         for (key, value) in &self.extra_init_data {
             json.insert(key.clone(), value.clone());
         }
+        for (key, provider) in &self.extra_init_data_providers {
+            json.insert(key.clone(), provider(self));
+        }
 
         /* ------------------------ Loading other the clients ----------------------- */
         let ids = self.read_component::<IDComp>();
@@ -435,5 +438,31 @@ impl World {
                 .build(),
             entity_ids,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Revision(u64);
+
+    #[test]
+    fn init_message_reads_dynamic_extra_data_at_join_time() {
+        let config = WorldConfig::new().saving(false).build();
+        let mut world = World::new("dynamic-init-data", &config);
+        world.ecs_mut().insert(Registry::new());
+        world.ecs_mut().insert(Revision(0));
+        world.set_extra_init_data_provider("revision", |world| {
+            serde_json::json!(world.read_resource::<Revision>().0)
+        });
+        world.write_resource::<Revision>().0 = 12;
+
+        let (message, _) =
+            world.generate_init_message("client", None, None, None, None, None, false);
+        let payload: serde_json::Value =
+            serde_json::from_str(&message.json).expect("init message JSON");
+
+        assert_eq!(payload["revision"], serde_json::json!(12));
     }
 }

@@ -188,6 +188,9 @@ pub struct World {
 
     extra_init_data: HashMap<String, serde_json::Value>,
 
+    extra_init_data_providers:
+        HashMap<String, Arc<dyn Fn(&World) -> serde_json::Value + Send + Sync>>,
+
     items: Option<ItemRegistry>,
 
     addr: Option<Addr<SyncWorld>>,
@@ -444,6 +447,7 @@ impl World {
             transport_handle: None,
             command_handle: None,
             extra_init_data: HashMap::default(),
+            extra_init_data_providers: HashMap::default(),
             items: None,
             addr: None,
             server_addr: None,

@@ -185,8 +185,12 @@ const minRadius = 1;
 const circular = true;
 
 inputs.scroll(
-  () => (radius = Math.min(maxRadius, radius + 1)),
-  () => (radius = Math.max(minRadius, radius - 1)),
+  () => {
+    radius = Math.min(maxRadius, radius + 1);
+  },
+  () => {
+    radius = Math.max(minRadius, radius - 1);
+  },
   "in-game",
 );
 
@@ -1388,7 +1392,7 @@ debug.registerDisplay("Concurrent WebWorkers", () => {
 const gui = new GUI();
 gui.domElement.style.top = "10px";
 
-inputs.bind("KeyJ", debug.toggle, "*");
+inputs.bind("KeyJ", () => debug.toggle(), "*");
 
 // debug.registerDisplay("Active Voxels", async () => {
 //   const data = await fetch(`${BACKEND_SERVER}info`);
@@ -1603,9 +1607,9 @@ class Drop extends VOXELIZE.Entity<{
     }
     return originalOnMessage(message, ...rest);
   };
-  (
-    window as Window & { __bench__?: Record<string, unknown> }
-  ).__bench__.entityMessages = () => entityMessageCount;
+  const benchWindow = window as Window & { __bench__?: Record<string, unknown> };
+  benchWindow.__bench__ ??= {};
+  benchWindow.__bench__.entityMessages = () => entityMessageCount;
 }
 
 inputs.on("namespace", (namespace) => {
@@ -1832,7 +1836,7 @@ window.addEventListener("resize", () => {
   const height = window.innerHeight as number;
 
   renderer.setSize(width, height);
-  renderer.pixelRatio = window.devicePixelRatio;
+  renderer.setPixelRatio(window.devicePixelRatio);
 
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
