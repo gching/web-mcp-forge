@@ -20,6 +20,7 @@
     "@voxelize/core": "workspace:*",
     "p5": "^1.11.3",
     "postprocessing": "^6.39.0",
-    "three": "^0.183.0"
+    "three": "^0.183.0",
+    "zod": "^3.25.76"
   }
 }

@@ -1,55 +1,148 @@
+import { z } from "zod/v4";
+
 export const MAX_BUILD_WRITES = 10_000;
 
 /** A name validated against the received Forge Builder Palette at parse time. */
 export type ForgeBlockName = string;
-export type VoxelPosition = { x: number; y: number; z: number };
-export type BuildStateProperties = Record<string, string | number | boolean>;
 
-export type BuildRequest = {
-  origin: VoxelPosition;
-  operations: BuildOperation[];
+const UNSAFE_STATE_PROPERTY_KEYS = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
+const BUILD_REQUEST_MESSAGE =
+  "Build Requests must contain only origin and a non-empty operations array.";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const safeIntegerSchema = z.number().int().safe();
+const positiveSafeIntegerSchema = safeIntegerSchema.positive();
+
+const voxelPositionSchema = z.strictObject({
+  x: safeIntegerSchema,
+  y: safeIntegerSchema,
+  z: safeIntegerSchema,
+});
+
+const positiveVoxelPositionSchema = z.strictObject({
+  x: positiveSafeIntegerSchema,
+  y: positiveSafeIntegerSchema,
+  z: positiveSafeIntegerSchema,
+});
+
+const buildStateScalarSchema = z.union([
+  z.string(),
+  safeIntegerSchema,
+  z.boolean(),
+]);
+
+const safeStatePropertyKeySchema = z
+  .string()
+  .min(1)
+  .regex(/^(?!(?:__proto__|prototype|constructor)$).+/);
+
+const INVALID_PROPERTIES_SENTINEL = "__forge_invalid_properties__";
+
+const guardStateProperties = (input: unknown) => {
+  if (!isRecord(input)) return input;
+
+  const prototype = Object.getPrototypeOf(input);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return INVALID_PROPERTIES_SENTINEL;
+  }
+
+  for (const key of Object.getOwnPropertyNames(input)) {
+    if (!key || UNSAFE_STATE_PROPERTY_KEYS.has(key)) {
+      return INVALID_PROPERTIES_SENTINEL;
+    }
+  }
+
+  return input;
 };
 
-export type BuildOperation =
-  | FillOperation
-  | HollowBoxOperation
-  | LineOperation
-  | VoxelsOperation;
+const buildStatePropertiesSchema = z.preprocess(
+  guardStateProperties,
+  z.record(safeStatePropertyKeySchema, buildStateScalarSchema),
+);
 
-export type FillOperation = {
-  type: "fill";
-  at: VoxelPosition;
-  size: VoxelPosition;
-  block: ForgeBlockName;
-  properties?: BuildStateProperties;
+const blockNameSchema = (allowedBlockNames: ReadonlySet<string>) => {
+  const blockNames = Array.from(allowedBlockNames);
+  return blockNames.length === 0
+    ? z.never()
+    : z.enum([blockNames[0], ...blockNames.slice(1)]);
 };
 
-export type HollowBoxOperation = {
-  type: "hollow_box";
-  at: VoxelPosition;
-  size: VoxelPosition;
-  block: ForgeBlockName;
-  properties?: BuildStateProperties;
-};
+const fillOperationSchema = (
+  block: ReturnType<typeof blockNameSchema>,
+) =>
+  z.strictObject({
+    type: z.literal("fill"),
+    at: voxelPositionSchema,
+    size: positiveVoxelPositionSchema,
+    block,
+    properties: buildStatePropertiesSchema.optional(),
+  });
 
-export type LineOperation = {
-  type: "line";
-  from: VoxelPosition;
-  to: VoxelPosition;
-  block: ForgeBlockName;
-  properties?: BuildStateProperties;
-};
+const hollowBoxOperationSchema = (
+  block: ReturnType<typeof blockNameSchema>,
+) =>
+  z.strictObject({
+    type: z.literal("hollow_box"),
+    at: voxelPositionSchema,
+    size: positiveVoxelPositionSchema,
+    block,
+    properties: buildStatePropertiesSchema.optional(),
+  });
 
-export type BuildVoxel = {
-  at: VoxelPosition;
-  block: ForgeBlockName;
-  properties?: BuildStateProperties;
-};
+const lineOperationSchema = (block: ReturnType<typeof blockNameSchema>) =>
+  z.strictObject({
+    type: z.literal("line"),
+    from: voxelPositionSchema,
+    to: voxelPositionSchema,
+    block,
+    properties: buildStatePropertiesSchema.optional(),
+  });
 
-export type VoxelsOperation = {
-  type: "voxels";
-  blocks: BuildVoxel[];
-};
+const buildVoxelSchema = (block: ReturnType<typeof blockNameSchema>) =>
+  z.strictObject({
+    at: voxelPositionSchema,
+    block,
+    properties: buildStatePropertiesSchema.optional(),
+  });
+
+const voxelsOperationSchema = (block: ReturnType<typeof blockNameSchema>) =>
+  z.strictObject({
+    type: z.literal("voxels"),
+    blocks: z.array(buildVoxelSchema(block)).min(1),
+  });
+
+const buildOperationSchema = (block: ReturnType<typeof blockNameSchema>) =>
+  z.discriminatedUnion("type", [
+    fillOperationSchema(block),
+    hollowBoxOperationSchema(block),
+    lineOperationSchema(block),
+    voxelsOperationSchema(block),
+  ]);
+
+export const buildRequestSchema = (allowedBlockNames: ReadonlySet<string>) =>
+  z.strictObject({
+    origin: voxelPositionSchema,
+    operations: z.array(buildOperationSchema(blockNameSchema(allowedBlockNames))).min(1),
+  });
+
+export type VoxelPosition = z.infer<typeof voxelPositionSchema>;
+export type BuildStateProperties = z.infer<typeof buildStatePropertiesSchema>;
+export type FillOperation = z.infer<ReturnType<typeof fillOperationSchema>>;
+export type HollowBoxOperation = z.infer<
+  ReturnType<typeof hollowBoxOperationSchema>
+>;
+export type LineOperation = z.infer<ReturnType<typeof lineOperationSchema>>;
+export type BuildVoxel = z.infer<ReturnType<typeof buildVoxelSchema>>;
+export type VoxelsOperation = z.infer<ReturnType<typeof voxelsOperationSchema>>;
+export type BuildOperation = z.infer<ReturnType<typeof buildOperationSchema>>;
+export type BuildRequest = z.infer<ReturnType<typeof buildRequestSchema>>;
 
 export type ExpandedBuildWrite = {
   operationIndex: number;
@@ -70,196 +163,131 @@ const invalid = (message: string): InvalidBuildRequest => ({
   error: { code: "invalid_build_request", message },
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const messageForPosition = (label: string) =>
+  `${label} must be an object containing three safe integers.`;
 
-const isInvalidBuildRequest = (value: unknown): value is InvalidBuildRequest =>
-  isRecord(value) && value.ok === false && isRecord(value.error);
+const messageForProperties = (label: string) =>
+  `${label} must contain only named scalar state properties with safe integer numbers.`;
 
-const isSafeInteger = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value);
-
-const hasOnly = (value: Record<string, unknown>, fields: string[]) =>
-  Object.keys(value).every((key) => fields.includes(key));
-
-const parsePosition = (
-  value: unknown,
-  label: string,
-): VoxelPosition | InvalidBuildRequest => {
-  if (
-    !isRecord(value) ||
-    !hasOnly(value, ["x", "y", "z"]) ||
-    !isSafeInteger(value.x) ||
-    !isSafeInteger(value.y) ||
-    !isSafeInteger(value.z)
-  ) {
-    return invalid(
-      `${label} must be an object containing three safe integers.`,
-    );
-  }
-  return { x: value.x, y: value.y, z: value.z };
+const sourceOperation = (input: unknown, index: number) => {
+  if (!isRecord(input) || !Array.isArray(input.operations)) return undefined;
+  return input.operations[index];
 };
 
-const parseProperties = (
-  value: unknown,
-  label: string,
-): BuildStateProperties | InvalidBuildRequest | undefined => {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) return invalid(`${label} must be an object.`);
+const normalizeProperties = (
+  properties?: BuildStateProperties,
+): BuildStateProperties | undefined =>
+  properties ? { ...properties } : undefined;
 
-  const properties: BuildStateProperties = {};
-  for (const [key, property] of Object.entries(value)) {
-    if (
-      !key ||
-      ["__proto__", "prototype", "constructor"].includes(key) ||
-      (typeof property !== "string" &&
-        typeof property !== "number" &&
-        typeof property !== "boolean") ||
-      (typeof property === "number" && !Number.isSafeInteger(property))
-    ) {
-      return invalid(
-        `${label} must contain only named scalar state properties with safe integer numbers.`,
+const normalizeBuildRequest = (request: BuildRequest): BuildRequest => ({
+  origin: request.origin,
+  operations: request.operations.map((operation) => {
+    switch (operation.type) {
+      case "fill":
+      case "hollow_box":
+      case "line":
+        return {
+          ...operation,
+          ...(operation.properties
+            ? { properties: normalizeProperties(operation.properties) }
+            : {}),
+        };
+      case "voxels":
+        return {
+          ...operation,
+          blocks: operation.blocks.map((voxel) => ({
+            ...voxel,
+            ...(voxel.properties
+              ? { properties: normalizeProperties(voxel.properties) }
+              : {}),
+          })),
+        };
+    }
+  }),
+});
+
+const mapBuildRequestIssue = (
+  input: unknown,
+  issue: { code: string; path: PropertyKey[] },
+) => {
+  const [root, operationIndex, field, nestedIndex, nestedField] = issue.path;
+
+  if (root === "origin") {
+    return messageForPosition("origin");
+  }
+
+  if (root !== "operations" || typeof operationIndex !== "number") {
+    return BUILD_REQUEST_MESSAGE;
+  }
+
+  const operation = sourceOperation(input, operationIndex);
+
+  if (
+    field === "at" ||
+    field === "from" ||
+    field === "to" ||
+    (field === "blocks" &&
+      typeof nestedIndex === "number" &&
+      nestedField === "at")
+  ) {
+    const label =
+      field === "blocks"
+        ? `Operation ${operationIndex}.blocks[${String(nestedIndex)}].at`
+        : `Operation ${operationIndex}.${String(field)}`;
+    return messageForPosition(label);
+  }
+
+  if (field === "size") {
+    return issue.code === "too_small"
+      ? `Operation ${operationIndex}.size must contain positive integers.`
+      : messageForPosition(`Operation ${operationIndex}.size`);
+  }
+
+  if (field === "block") {
+    return `Operation ${operationIndex}.block must be a canonical Forge Builder Palette block name.`;
+  }
+
+  if (field === "properties") {
+    return messageForProperties(`Operation ${operationIndex}.properties`);
+  }
+
+  if (field === "blocks" && typeof nestedIndex !== "number") {
+    return `Operation ${operationIndex} must be a voxels operation with a non-empty blocks array.`;
+  }
+
+  if (field === "blocks" && typeof nestedIndex === "number") {
+    if (nestedField === "block") {
+      return `Operation ${operationIndex}.blocks[${String(nestedIndex)}].block must be a canonical Forge Builder Palette block name.`;
+    }
+
+    if (nestedField === "properties") {
+      return messageForProperties(
+        `Operation ${operationIndex}.blocks[${String(nestedIndex)}].properties`,
       );
     }
-    properties[key] = property;
-  }
-  return properties;
-};
 
-const parseBlock = (
-  value: unknown,
-  label: string,
-  allowedBlockNames: ReadonlySet<string>,
-): ForgeBlockName | InvalidBuildRequest => {
-  if (typeof value === "string" && allowedBlockNames.has(value)) {
-    return value;
+    return `Operation ${operationIndex}.blocks[${String(nestedIndex)}] contains unsupported fields.`;
   }
-  return invalid(
-    `${label} must be a canonical Forge Builder Palette block name.`,
-  );
-};
 
-const parseRectangularOperation = (
-  value: Record<string, unknown>,
-  index: number,
-  type: "fill" | "hollow_box",
-  allowedBlockNames: ReadonlySet<string>,
-): BuildOperation | InvalidBuildRequest => {
+  if (field === "type") {
+    return isRecord(operation) && typeof operation.type === "string"
+      ? `Operation ${operationIndex} has an unsupported type.`
+      : `Operation ${operationIndex} must be an object with a supported type.`;
+  }
+
   if (
-    !hasOnly(value, ["type", "at", "size", "block", "properties"]) ||
-    value.type !== type
+    issue.code === "unrecognized_keys" &&
+    isRecord(operation) &&
+    operation.type === "voxels"
   ) {
-    return invalid(`Operation ${index} contains unsupported fields.`);
-  }
-  const at = parsePosition(value.at, `Operation ${index}.at`);
-  if ("error" in at) return at;
-  const size = parsePosition(value.size, `Operation ${index}.size`);
-  if ("error" in size) return size;
-  if (size.x <= 0 || size.y <= 0 || size.z <= 0) {
-    return invalid(`Operation ${index}.size must contain positive integers.`);
-  }
-  const block = parseBlock(
-    value.block,
-    `Operation ${index}.block`,
-    allowedBlockNames,
-  );
-  if (isRecord(block) && "error" in block) return block;
-  const properties = parseProperties(
-    value.properties,
-    `Operation ${index}.properties`,
-  );
-  if (isInvalidBuildRequest(properties)) return properties;
-  return {
-    type,
-    at,
-    size,
-    block,
-    ...(properties ? { properties } : {}),
-  } as BuildOperation;
-};
-
-const parseLineOperation = (
-  value: Record<string, unknown>,
-  index: number,
-  allowedBlockNames: ReadonlySet<string>,
-): BuildOperation | InvalidBuildRequest => {
-  if (
-    !hasOnly(value, ["type", "from", "to", "block", "properties"]) ||
-    value.type !== "line"
-  ) {
-    return invalid(`Operation ${index} contains unsupported fields.`);
-  }
-  const from = parsePosition(value.from, `Operation ${index}.from`);
-  if ("error" in from) return from;
-  const to = parsePosition(value.to, `Operation ${index}.to`);
-  if ("error" in to) return to;
-  const block = parseBlock(
-    value.block,
-    `Operation ${index}.block`,
-    allowedBlockNames,
-  );
-  if (isRecord(block) && "error" in block) return block;
-  const properties = parseProperties(
-    value.properties,
-    `Operation ${index}.properties`,
-  );
-  if (isInvalidBuildRequest(properties)) return properties;
-  return {
-    type: "line",
-    from,
-    to,
-    block,
-    ...(properties ? { properties } : {}),
-  };
-};
-
-const parseVoxelsOperation = (
-  value: Record<string, unknown>,
-  index: number,
-  allowedBlockNames: ReadonlySet<string>,
-): BuildOperation | InvalidBuildRequest => {
-  if (
-    !hasOnly(value, ["type", "blocks"]) ||
-    value.type !== "voxels" ||
-    !Array.isArray(value.blocks) ||
-    value.blocks.length === 0
-  ) {
-    return invalid(
-      `Operation ${index} must be a voxels operation with a non-empty blocks array.`,
-    );
+    return `Operation ${operationIndex} must be a voxels operation with a non-empty blocks array.`;
   }
 
-  const blocks: BuildVoxel[] = [];
-  for (let blockIndex = 0; blockIndex < value.blocks.length; blockIndex++) {
-    const source = value.blocks[blockIndex];
-    if (!isRecord(source) || !hasOnly(source, ["at", "block", "properties"])) {
-      return invalid(
-        `Operation ${index}.blocks[${blockIndex}] contains unsupported fields.`,
-      );
-    }
-    const at = parsePosition(
-      source.at,
-      `Operation ${index}.blocks[${blockIndex}].at`,
-    );
-    if ("error" in at) return at;
-    const block = parseBlock(
-      source.block,
-      `Operation ${index}.blocks[${blockIndex}].block`,
-      allowedBlockNames,
-    );
-    if (isRecord(block) && "error" in block) return block;
-    const properties = parseProperties(
-      source.properties,
-      `Operation ${index}.blocks[${blockIndex}].properties`,
-    );
-    if (isInvalidBuildRequest(properties)) return properties;
-    blocks.push({
-      at,
-      block,
-      ...(properties ? { properties } : {}),
-    });
+  if (issue.code === "unrecognized_keys") {
+    return `Operation ${operationIndex} contains unsupported fields.`;
   }
-  return { type: "voxels", blocks };
+
+  return `Operation ${operationIndex} must be an object with a supported type.`;
 };
 
 export const parseBuildRequest = (
@@ -269,45 +297,16 @@ export const parseBuildRequest = (
   if (allowedBlockNames.size === 0) {
     return invalid("Forge Builder Palette names are unavailable.");
   }
-  if (
-    !isRecord(input) ||
-    !hasOnly(input, ["origin", "operations"]) ||
-    !Array.isArray(input.operations) ||
-    input.operations.length === 0
-  ) {
+
+  const result = buildRequestSchema(allowedBlockNames).safeParse(input);
+
+  if (!result.success) {
     return invalid(
-      "Build Requests must contain only origin and a non-empty operations array.",
+      mapBuildRequestIssue(input, result.error.issues[0] as never),
     );
   }
 
-  const origin = parsePosition(input.origin, "origin");
-  if ("error" in origin) return origin;
-
-  const operations: BuildOperation[] = [];
-  for (let index = 0; index < input.operations.length; index++) {
-    const operation = input.operations[index];
-    if (!isRecord(operation) || typeof operation.type !== "string") {
-      return invalid(
-        `Operation ${index} must be an object with a supported type.`,
-      );
-    }
-    const parsed =
-      operation.type === "fill" || operation.type === "hollow_box"
-        ? parseRectangularOperation(
-            operation,
-            index,
-            operation.type,
-            allowedBlockNames,
-          )
-        : operation.type === "line"
-          ? parseLineOperation(operation, index, allowedBlockNames)
-          : operation.type === "voxels"
-            ? parseVoxelsOperation(operation, index, allowedBlockNames)
-            : invalid(`Operation ${index} has an unsupported type.`);
-    if ("error" in parsed) return parsed;
-    operations.push(parsed);
-  }
-  return { origin, operations };
+  return normalizeBuildRequest(result.data);
 };
 
 const absolutePosition = (
