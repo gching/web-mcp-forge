@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BlockRotation } from "@voxelize/core";
 
 import type { ForgeBuildPalette } from "./palette";
+import * as runtimeModule from "./runtime";
 import { buildStructureInputSchema, ForgeRuntime } from "./runtime";
 
 const builderPalette: ForgeBuildPalette = {
@@ -104,7 +105,7 @@ describe("ForgeRuntime Builder Palette contract", () => {
     expectPlainJson(schema);
   });
 
-  it("describes strict valid-operation payloads and strict empty get_player_context input", () => {
+  it("describes strict valid-operation payloads", () => {
     const schema = buildStructureInputSchema(builderPalette);
     const operationSchemas = (
       (
@@ -129,17 +130,17 @@ describe("ForgeRuntime Builder Palette contract", () => {
       false,
     ]);
     expect(schema).not.toHaveProperty("additionalProperties.properties");
-    expect({
-      type: "object",
-      properties: {},
-      required: [],
-      additionalProperties: false,
-    }).toEqual({
-      type: "object",
-      properties: {},
-      required: [],
-      additionalProperties: false,
-    });
+  });
+
+  it("exposes a strict empty get_player_context input schema", () => {
+    expect(runtimeModule.getPlayerContextInputSchema).toBeDefined();
+    expect(runtimeModule.getPlayerContextInputSchema.safeParse({}).success).toBe(
+      true,
+    );
+    expect(
+      runtimeModule.getPlayerContextInputSchema.safeParse({ extra: true })
+        .success,
+    ).toBe(false);
   });
 
   it("rejects malformed metadata before registering either WebMCP tool", async () => {
