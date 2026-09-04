@@ -11,8 +11,6 @@ use voxelize::{
     TargetMetadataSystem, TimedDispatcherBuilder, UpdateStatsSystem, WalkTowardsSystem, World,
 };
 
-use super::forge::ForgeBuildSystem;
-
 pub use self::fauna_wander::FaunaWanderSystem;
 
 use self::{
@@ -58,7 +56,6 @@ pub fn setup_dispatcher(world: &mut World) {
             )
             .with(ChunkSendingSystem, "chunk-sending", &["chunk-generation"])
             .with(ChunkSavingSystem, "chunk-saving", &["chunk-generation"])
-            .with(ForgeBuildSystem, "forge-build", &["chunk-updating"])
             .with(PhysicsSystem, "physics", &["current-chunk", "update-stats"])
             .with(DataSavingSystem, "entities-saving", &["entities-meta"])
             .with(
@@ -74,12 +71,7 @@ pub fn setup_dispatcher(world: &mut World) {
             .with(
                 BroadcastSystem,
                 "broadcast",
-                &[
-                    "chunk-sending",
-                    "entities-sending",
-                    "peers-sending",
-                    "forge-build",
-                ],
+                &["chunk-sending", "entities-sending", "peers-sending"],
             )
             .with(
                 CleanupSystem,

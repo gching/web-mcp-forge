@@ -5,7 +5,6 @@ import type {
   BuildBounds,
   BuildRequest,
   BuildStateProperties,
-  ExpandedBuildWrite,
   VoxelPosition,
 } from "./build-language";
 import {
@@ -84,34 +83,32 @@ type ForgeContext = {
     properties: BuildStateProperties;
   }>;
   availableBlocks: ForgeBuildPaletteBlock[];
-  worldRevision: number;
 };
 
-type BuildProgress = {
-  requestId: string;
-  applied: number;
-  total: number;
-  revision: number;
-};
-
-type BuildReceipt = {
-  ok: boolean;
-  outcome: string;
+type BuildAcceptance = {
+  ok: true;
+  outcome: "accepted";
   requestId: string;
   requested: number;
   expanded: number;
-  applied: number;
+  submitted: number;
   bounds: BuildBounds | null;
   elapsedMs: number;
-  revision: number;
-  persistence: string;
-  error?: {
-    code?: string;
-    message: string;
-    operationIndex?: number;
-    position?: VoxelPosition;
-  };
 };
+
+type InvalidBuildAcceptance = {
+  ok: false;
+  outcome: "invalid";
+  requestId: string;
+  requested: number;
+  expanded: 0;
+  submitted: 0;
+  bounds: null;
+  elapsedMs: number;
+  error: { code: "invalid_build_request"; message: string };
+};
+
+type BuildResponse = BuildAcceptance | InvalidBuildAcceptance;
 
 type AgentEventListener = (data: unknown) => void;
 
@@ -171,9 +168,6 @@ declare global {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const asNumber = (value: unknown, fallback = 0) =>
-  typeof value === "number" && Number.isFinite(value) ? value : fallback;
-
 const asMessageMethod = (message: Message) => {
   const candidate = message as Message & {
     method?: { name?: unknown; payload?: unknown };
@@ -197,6 +191,103 @@ const parseMessagePayload = (
   } catch {
     return null;
   }
+};
+
+const invalidBuildAcceptance = (message: string): InvalidBuildAcceptance => ({
+  ok: false,
+  outcome: "invalid",
+  requestId: "",
+  requested: 0,
+  expanded: 0,
+  submitted: 0,
+  bounds: null,
+  elapsedMs: 0,
+  error: { code: "invalid_build_request", message },
+});
+
+const hasExactKeys = (value: Record<string, unknown>, keys: string[]) => {
+  const actual = Object.keys(value).sort();
+  return (
+    actual.length === keys.length &&
+    actual.every((key, index) => key === [...keys].sort()[index])
+  );
+};
+
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+const isPosition = (value: unknown): value is VoxelPosition => {
+  if (!isRecord(value) || !hasExactKeys(value, ["x", "y", "z"])) return false;
+  return (
+    Number.isSafeInteger(value.x) &&
+    Number.isSafeInteger(value.y) &&
+    Number.isSafeInteger(value.z)
+  );
+};
+
+const isBounds = (value: unknown): value is BuildBounds | null => {
+  if (value === null) return true;
+  if (!isRecord(value) || !hasExactKeys(value, ["min", "max"])) return false;
+  return isPosition(value.min) && isPosition(value.max);
+};
+
+const parseBuildResponse = (
+  value: Record<string, unknown>,
+  requestId: string,
+): BuildResponse | null => {
+  if (value.requestId !== requestId || !isNonNegativeInteger(value.requested)) {
+    return null;
+  }
+  if (
+    value.ok === true &&
+    value.outcome === "accepted" &&
+    hasExactKeys(value, [
+      "ok",
+      "outcome",
+      "requestId",
+      "requested",
+      "expanded",
+      "submitted",
+      "bounds",
+      "elapsedMs",
+    ]) &&
+    isNonNegativeInteger(value.expanded) &&
+    value.submitted === value.expanded &&
+    isBounds(value.bounds) &&
+    typeof value.elapsedMs === "number" &&
+    Number.isFinite(value.elapsedMs) &&
+    value.elapsedMs >= 0
+  ) {
+    return value as unknown as BuildAcceptance;
+  }
+  if (
+    value.ok === false &&
+    value.outcome === "invalid" &&
+    hasExactKeys(value, [
+      "ok",
+      "outcome",
+      "requestId",
+      "requested",
+      "expanded",
+      "submitted",
+      "bounds",
+      "elapsedMs",
+      "error",
+    ]) &&
+    value.expanded === 0 &&
+    value.submitted === 0 &&
+    value.bounds === null &&
+    typeof value.elapsedMs === "number" &&
+    Number.isFinite(value.elapsedMs) &&
+    value.elapsedMs >= 0 &&
+    isRecord(value.error) &&
+    hasExactKeys(value.error, ["code", "message"]) &&
+    value.error.code === "invalid_build_request" &&
+    typeof value.error.message === "string"
+  ) {
+    return value as unknown as InvalidBuildAcceptance;
+  }
+  return null;
 };
 
 const makeRequestId = () => {
@@ -345,7 +436,7 @@ const toolDefinitions = (
     name: "get_player_context",
     title: "Get Player Context",
     description:
-      "Read fresh Player Context from this page: the live player pose and view, current Spatial Target, a fixed 33-by-33 nearby surface map, non-air obstacles above it, canonical Forge block names, and the latest known world revision. The observed region is advisory and does not limit a later Build Request.",
+      "Read fresh Player Context from this page: the live player pose and view, current Spatial Target, a fixed 33-by-33 nearby surface map, non-air obstacles above it, and canonical Forge block names. The observed region is advisory and does not limit a later Build Request.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -377,7 +468,6 @@ const toolDefinitions = (
 
 export type ForgeRuntimeOptions = {
   agentMode?: boolean;
-  buildTimeoutMs?: number;
 };
 
 /**
@@ -390,20 +480,17 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
 
   private textureReady = false;
   private toolsRegistered = false;
-  private revision = 0;
   private palette: ForgeBuildPalette | null = null;
   private paletteError: Error | null = null;
-  private readonly buildTimeoutMs: number;
-  private pendingBuild: {
-    requestId: string;
-    packet: Message;
-    generation: number;
-    resolve: (receipt: BuildReceipt) => void;
-    reject: (error: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-    abortCleanup?: () => void;
-  } | null = null;
-  private activeProgress: BuildProgress | null = null;
+  private readonly pendingBuilds = new Map<
+    string,
+    {
+      packet: Message;
+      resolve: (response: BuildResponse) => void;
+      reject: (error: Error) => void;
+      abortCleanup?: () => void;
+    }
+  >();
   private readonly agentMode: boolean;
   private readonly agentReady: Promise<void>;
   private resolveAgentReady!: () => void;
@@ -418,8 +505,6 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     options: ForgeRuntimeOptions = {},
   ) {
     this.agentMode = options.agentMode ?? this.readAgentMode();
-    this.buildTimeoutMs = options.buildTimeoutMs ?? 60_000;
-    this.revision = this.readRevision();
     this.agentReady = new Promise<void>((resolve, reject) => {
       this.resolveAgentReady = resolve;
       this.rejectAgentReady = reject;
@@ -428,31 +513,22 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     const previousJoin = network.onJoin;
     network.onJoin = (worldName) => {
       previousJoin?.(worldName);
-      this.revision = this.readRevision();
-      if (this.pendingBuild) {
-        this.rejectPendingBuild(
-          new Error("Forge build failed: the Voxelize session rejoined."),
-        );
-      }
+      this.rejectPendingBuilds(
+        new Error("Forge build failed: the Voxelize session rejoined."),
+      );
     };
     const previousDisconnect = network.onDisconnect;
     network.onDisconnect = () => {
       previousDisconnect?.();
-      if (this.pendingBuild) {
-        this.rejectPendingBuild(
-          new Error(
-            "Forge build failed: the Voxelize connection disconnected.",
-          ),
-        );
-      }
+      this.rejectPendingBuilds(
+        new Error("Forge build failed: the Voxelize connection disconnected."),
+      );
     };
 
     window.addEventListener("pagehide", () => {
-      if (this.pendingBuild) {
-        this.rejectPendingBuild(
-          new Error("Forge build failed: the page is navigating."),
-        );
-      }
+      this.rejectPendingBuilds(
+        new Error("Forge build failed: the page is navigating."),
+      );
     });
 
     if (this.agentMode) {
@@ -462,7 +538,6 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
 
   /** Call after the page's Builder Palette texture promises have completed. */
   markTextureReadinessComplete() {
-    this.revision = this.readRevision();
     try {
       this.palette = parseForgeBuildPalette(
         this.world.extraInitData.forgeBuildPalette,
@@ -522,47 +597,20 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
     const payload = parseMessagePayload(method.payload);
     if (!payload) return;
 
-    if (method.name === "forge:revision") {
-      this.revision = asNumber(payload.revision, this.revision);
-      return;
-    }
-
-    if (method.name === "forge:build-progress") {
-      if (
-        this.pendingBuild &&
-        payload.requestId === this.pendingBuild.requestId
-      ) {
-        this.activeProgress = {
-          requestId: String(payload.requestId),
-          applied: asNumber(payload.applied),
-          total: asNumber(payload.total),
-          revision: asNumber(payload.revision, this.revision),
-        };
-        this.revision = this.activeProgress.revision;
-        this.renderProgress(this.activeProgress);
-        this.emit("build-progress", this.activeProgress);
-      }
-      return;
-    }
-
     if (method.name !== "forge:build-result") return;
-    if (!this.pendingBuild) return;
+    if (typeof payload.requestId !== "string") return;
+    if (!this.pendingBuilds.has(payload.requestId)) return;
 
-    if (payload.requestId !== this.pendingBuild.requestId) {
+    const response = parseBuildResponse(payload, payload.requestId);
+    if (!response) {
       this.rejectPendingBuild(
-        new Error(
-          "Forge build failed: the server returned a mismatched requestId.",
-        ),
+        payload.requestId,
+        new Error("Forge build returned an invalid Build Acceptance."),
       );
       return;
     }
-
-    const receipt = payload as unknown as BuildReceipt;
-    this.revision = asNumber(receipt.revision, this.revision);
-    this.activeProgress = null;
-    this.renderProgress(null);
-    this.emit("build-result", receipt);
-    this.finishPendingBuild(receipt);
+    this.emit("build-result", response);
+    this.finishPendingBuild(payload.requestId, response);
   }
 
   getPlayerContext(): ForgeContext {
@@ -583,7 +631,6 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       surfaceMap,
       obstacles,
       availableBlocks: this.requiredPalette().blocks,
-      worldRevision: this.revision,
     };
   }
 
@@ -598,46 +645,22 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       input,
       paletteBlockNames(this.requiredPalette()),
     );
-    if ("error" in parsed) return parsed;
+    if ("error" in parsed) return invalidBuildAcceptance(parsed.error.message);
 
     const writes = expandBuildRequest(parsed);
     if (writes.length > MAX_BUILD_WRITES) {
-      return {
-        ok: false,
-        error: {
-          code: "build_limit_exceeded",
-          message: `Build Request expands to more than ${MAX_BUILD_WRITES} writes.`,
-        },
-      };
+      return invalidBuildAcceptance(
+        `Build Request expands to more than ${MAX_BUILD_WRITES} writes.`,
+      );
     }
 
-    return this.dispatchBuild(parsed, writes, signal);
+    return this.dispatchBuild(parsed, signal);
   }
 
   private dispatchBuild(
     request: BuildRequest,
-    writes: ExpandedBuildWrite[],
     signal?: AbortSignal,
-  ): Promise<BuildReceipt> {
-    if (this.pendingBuild) {
-      return Promise.resolve({
-        ok: false,
-        outcome: "busy",
-        requestId: "",
-        requested: request.operations.length,
-        expanded: writes.length,
-        applied: 0,
-        bounds: null,
-        elapsedMs: 0,
-        revision: this.revision,
-        persistence: "not_started",
-        error: {
-          code: "busy",
-          message: "Another Forge Build Request is active.",
-        },
-      });
-    }
-
+  ): Promise<BuildResponse> {
     const requestId = makeRequestId();
     const packet = {
       type: "METHOD",
@@ -647,19 +670,15 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       },
     } as Message;
 
-    return new Promise<BuildReceipt>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.rejectPendingBuild(
-          new Error(`Forge build timed out after ${this.buildTimeoutMs}ms.`),
-        );
-      }, this.buildTimeoutMs);
-
+    return new Promise<BuildResponse>((resolve, reject) => {
       let abortCleanup: (() => void) | undefined;
       if (signal) {
         const abort = () =>
-          this.rejectPendingBuild(new Error("Forge build was aborted."));
+          this.rejectPendingBuild(
+            requestId,
+            new Error("Forge build was aborted."),
+          );
         if (signal.aborted) {
-          clearTimeout(timer);
           reject(new Error("Forge build was aborted."));
           return;
         }
@@ -667,38 +686,37 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
         abortCleanup = () => signal.removeEventListener("abort", abort);
       }
 
-      this.pendingBuild = {
-        requestId,
+      this.pendingBuilds.set(requestId, {
         packet,
-        generation: this.network.joinGeneration,
         resolve,
         reject,
-        timer,
         abortCleanup,
-      };
+      });
       this.packets.push(packet);
     });
   }
 
-  private finishPendingBuild(receipt: BuildReceipt) {
-    const pending = this.pendingBuild;
+  private finishPendingBuild(requestId: string, response: BuildResponse) {
+    const pending = this.pendingBuilds.get(requestId);
     if (!pending) return;
-    this.pendingBuild = null;
-    clearTimeout(pending.timer);
+    this.pendingBuilds.delete(requestId);
     pending.abortCleanup?.();
-    pending.resolve(receipt);
+    pending.resolve(response);
   }
 
-  private rejectPendingBuild(error: Error) {
-    const pending = this.pendingBuild;
+  private rejectPendingBuild(requestId: string, error: Error) {
+    const pending = this.pendingBuilds.get(requestId);
     if (!pending) return;
-    this.pendingBuild = null;
-    clearTimeout(pending.timer);
+    this.pendingBuilds.delete(requestId);
     pending.abortCleanup?.();
     this.packets = this.packets.filter((packet) => packet !== pending.packet);
-    this.activeProgress = null;
-    this.renderProgress(null);
     pending.reject(error);
+  }
+
+  private rejectPendingBuilds(error: Error) {
+    for (const requestId of [...this.pendingBuilds.keys()]) {
+      this.rejectPendingBuild(requestId, error);
+    }
   }
 
   private hasCoreReadiness() {
@@ -708,16 +726,8 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       !this.network.isJoinPending &&
       !this.network.isClientOutdated &&
       this.world.isInitialized &&
-      this.hasForgeWorld() &&
       this.textureReady &&
       this.palette !== null
-    );
-  }
-
-  private hasForgeWorld() {
-    return Object.prototype.hasOwnProperty.call(
-      this.world.extraInitData,
-      "forgeRevision",
     );
   }
 
@@ -907,38 +917,6 @@ export class ForgeRuntime implements VOXELIZE.NetIntercept {
       rotation,
       yRotation,
     };
-  }
-
-  private readRevision() {
-    return asNumber(this.world.extraInitData.forgeRevision, 0);
-  }
-
-  private renderProgress(progress: BuildProgress | null) {
-    if (typeof document === "undefined") return;
-    let element = document.getElementById("forge-build-progress");
-    if (!element) {
-      element = document.createElement("div");
-      element.id = "forge-build-progress";
-      element.setAttribute("role", "status");
-      element.setAttribute("aria-live", "polite");
-      Object.assign(element.style, {
-        position: "fixed",
-        left: "50%",
-        bottom: "18px",
-        transform: "translateX(-50%)",
-        padding: "6px 12px",
-        borderRadius: "999px",
-        background: "rgba(0, 0, 0, 0.72)",
-        color: "white",
-        font: "12px sans-serif",
-        zIndex: "20",
-      });
-      document.body.appendChild(element);
-    }
-    element.textContent = progress
-      ? `Building ${progress.applied}/${progress.total}`
-      : "";
-    element.hidden = !progress;
   }
 
   private emit(event: string, data: unknown) {

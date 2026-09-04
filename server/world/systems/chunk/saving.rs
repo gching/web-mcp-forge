@@ -297,10 +297,11 @@ mod chunk_persistence_tests {
     fn apply_edits(world: &mut World, edits: &[(Vec3<i32>, u32)]) {
         {
             let mut chunks = world.chunks_mut();
-
-            for (voxel, id) in edits {
-                chunks.update_voxel(voxel, BlockUtils::insert_id(0, *id));
-            }
+            let updates: Vec<_> = edits
+                .iter()
+                .map(|(voxel, id)| (voxel.clone(), BlockUtils::insert_id(0, *id)))
+                .collect();
+            chunks.update_voxels(&updates);
         }
 
         settle_light(world);
@@ -527,6 +528,49 @@ mod chunk_persistence_tests {
                 "edit at {voxel:?} did not survive the restart"
             );
         }
+
+        drop(reloaded);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Forge submits every accepted expansion through `Chunks::update_voxels`,
+    /// the same staging API used here. The staging map gives the later batch
+    /// the winning value at an overlap; the ordinary player edit shares that
+    /// queue and the background saver persists the resulting world state.
+    #[test]
+    fn a_batch_of_forge_acceptances_and_a_player_edit_survive_restart() {
+        let dir = fresh_save_dir("forge-batch-session");
+        let overlap = Vec3(5, 5, 5);
+        let forge_only = Vec3(16, 5, 5);
+        let player_edit = Vec3(7, 5, 7);
+        let second_forge_only = Vec3(-8, 5, -8);
+
+        let mut world = preloaded_world(Some(&dir), false);
+        {
+            let mut chunks = world.chunks_mut();
+            chunks.update_voxels(&[
+                (overlap.clone(), BlockUtils::insert_id(0, GROUND_ID)),
+                (forge_only.clone(), BlockUtils::insert_id(0, GROUND_ID)),
+            ]);
+            chunks.update_voxel(&player_edit, BlockUtils::insert_id(0, GROUND_ID));
+            chunks.update_voxels(&[
+                (overlap.clone(), BlockUtils::insert_id(0, AIR_ID)),
+                (
+                    second_forge_only.clone(),
+                    BlockUtils::insert_id(0, GROUND_ID),
+                ),
+            ]);
+        }
+        settle_light(&mut world);
+        wait_for_saved_chunks(&mut world, &dir, 3);
+        settle_disk(&mut world);
+        drop(world);
+
+        let reloaded = preloaded_world(Some(&dir), false);
+        assert_eq!(reloaded.chunks().get_voxel(5, 5, 5), AIR_ID);
+        assert_eq!(reloaded.chunks().get_voxel(16, 5, 5), GROUND_ID);
+        assert_eq!(reloaded.chunks().get_voxel(7, 5, 7), GROUND_ID);
+        assert_eq!(reloaded.chunks().get_voxel(-8, 5, -8), GROUND_ID);
 
         drop(reloaded);
         fs::remove_dir_all(&dir).ok();

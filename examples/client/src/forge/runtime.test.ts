@@ -98,7 +98,7 @@ describe("ForgeRuntime Builder Palette contract", () => {
       } as never,
       {
         isInitialized: true,
-        extraInitData: { forgeRevision: 3, forgeBuildPalette: { blocks: [] } },
+        extraInitData: { forgeBuildPalette: { blocks: [] } },
         options: { chunkSize: 16 },
         getChunkByCoords: () => ({ isReady: true }),
         getBlockByName: () => undefined,
@@ -136,7 +136,7 @@ describe("ForgeRuntime Builder Palette contract", () => {
       } as never,
       {
         isInitialized: true,
-        extraInitData: { forgeRevision: 8, forgeBuildPalette: builderPalette },
+        extraInitData: { forgeBuildPalette: builderPalette },
         options: { chunkSize: 16 },
         getChunkByCoords: () => ({ isReady: true }),
         getBlockByName: (name: string) => registryBlocks.get(name),
@@ -171,6 +171,7 @@ describe("ForgeRuntime Builder Palette contract", () => {
 
     const context = runtime.getPlayerContext();
 
+    expect(context).not.toHaveProperty("worldRevision");
     expect(context.availableBlocks).toEqual(builderPalette.blocks);
     expect(context.spatialTarget?.block).toMatchObject({
       name: "Water",
@@ -188,5 +189,197 @@ describe("ForgeRuntime Builder Palette contract", () => {
       name: "Water",
       rotation: 2,
     });
+  });
+});
+
+const buildRequest = (block = "Glass") => ({
+  origin: { x: 1, y: 50, z: 2 },
+  operations: [
+    {
+      type: "fill",
+      at: { x: 0, y: 0, z: 0 },
+      size: { x: 1, y: 1, z: 1 },
+      block,
+    },
+  ],
+});
+
+const readyRuntime = () => {
+  vi.stubGlobal("window", { addEventListener: vi.fn() });
+  const registryBlocks = new Map(
+    builderPalette.blocks.map((block) => [
+      block.name,
+      { id: block.id, name: block.name },
+    ]),
+  );
+  const runtime = new ForgeRuntime(
+    {
+      connected: true,
+      joined: true,
+      isJoinPending: false,
+      isClientOutdated: false,
+      joinGeneration: 0,
+    } as never,
+    {
+      isInitialized: true,
+      extraInitData: { forgeBuildPalette: builderPalette },
+      getBlockByName: (name: string) => registryBlocks.get(name),
+    } as never,
+    {} as never,
+    {} as never,
+    { agentMode: false },
+  );
+  runtime.markTextureReadinessComplete();
+  return runtime;
+};
+
+const packetRequestId = (packet: unknown) =>
+  JSON.parse(String((packet as { method: { payload: string } }).method.payload))
+    .requestId as string;
+
+const buildAcceptance = (requestId: string) => ({
+  ok: true,
+  outcome: "accepted",
+  requestId,
+  requested: 1,
+  expanded: 1,
+  submitted: 1,
+  bounds: {
+    min: { x: 1, y: 50, z: 2 },
+    max: { x: 1, y: 50, z: 2 },
+  },
+  elapsedMs: 1,
+});
+
+describe("ForgeRuntime Build Acceptance contract", () => {
+  it("returns an exact invalid acceptance for local preflight failures", async () => {
+    const runtime = readyRuntime();
+
+    await expect(runtime.buildStructure({})).resolves.toEqual({
+      ok: false,
+      outcome: "invalid",
+      requestId: "",
+      requested: 0,
+      expanded: 0,
+      submitted: 0,
+      bounds: null,
+      elapsedMs: 0,
+      error: {
+        code: "invalid_build_request",
+        message:
+          "Build Requests must contain only origin and a non-empty operations array.",
+      },
+    });
+  });
+
+  it("resolves from a matching acceptance without receipt or revision fields", async () => {
+    const runtime = readyRuntime();
+    const result = runtime.buildStructure(buildRequest());
+
+    expect(runtime.packets).toHaveLength(1);
+    const requestId = packetRequestId(runtime.packets[0]);
+    const acceptance = buildAcceptance(requestId);
+    runtime.onMessage({
+      method: {
+        name: "forge:build-result",
+        payload: JSON.stringify(acceptance),
+      },
+    } as never);
+
+    await expect(result).resolves.toEqual(acceptance);
+  });
+
+  it("rejects a matching legacy or otherwise forbidden response shape", async () => {
+    const runtime = readyRuntime();
+    const result = runtime.buildStructure(buildRequest());
+    const requestId = packetRequestId(runtime.packets[0]);
+
+    runtime.onMessage({
+      method: {
+        name: "forge:build-result",
+        payload: JSON.stringify({
+          ...buildAcceptance(requestId),
+          outcome: "busy",
+          revision: 4,
+          persistence: "not_started",
+        }),
+      },
+    } as never);
+
+    await expect(result).rejects.toThrow(
+      "Forge build returned an invalid Build Acceptance.",
+    );
+  });
+
+  it("rejects a matching acceptance with missing required fields", async () => {
+    const runtime = readyRuntime();
+    const result = runtime.buildStructure(buildRequest());
+    const requestId = packetRequestId(runtime.packets[0]);
+    const malformed: Record<string, unknown> = buildAcceptance(requestId);
+    delete malformed.submitted;
+
+    runtime.onMessage({
+      method: {
+        name: "forge:build-result",
+        payload: JSON.stringify(malformed),
+      },
+    } as never);
+
+    await expect(result).rejects.toThrow(
+      "Forge build returned an invalid Build Acceptance.",
+    );
+  });
+
+  it("keeps concurrent request correlations independent", async () => {
+    const runtime = readyRuntime();
+    const first = runtime.buildStructure(buildRequest("Glass"));
+    const second = runtime.buildStructure(buildRequest("Oak Log"));
+
+    expect(runtime.packets).toHaveLength(2);
+    const firstId = packetRequestId(runtime.packets[0]);
+    const secondId = packetRequestId(runtime.packets[1]);
+
+    runtime.onMessage({
+      method: {
+        name: "forge:build-result",
+        payload: JSON.stringify(buildAcceptance(secondId)),
+      },
+    } as never);
+    runtime.onMessage({
+      method: {
+        name: "forge:build-result",
+        payload: JSON.stringify(buildAcceptance(firstId)),
+      },
+    } as never);
+
+    await expect(first).resolves.toMatchObject({
+      requestId: firstId,
+      outcome: "accepted",
+    });
+    await expect(second).resolves.toMatchObject({
+      requestId: secondId,
+      outcome: "accepted",
+    });
+  });
+
+  it("ignores an acceptance for another page or request", async () => {
+    const runtime = readyRuntime();
+    const result = runtime.buildStructure(buildRequest());
+    const requestId = packetRequestId(runtime.packets[0]);
+
+    runtime.onMessage({
+      method: {
+        name: "forge:build-result",
+        payload: JSON.stringify(buildAcceptance("another-page-request")),
+      },
+    } as never);
+    runtime.onMessage({
+      method: {
+        name: "forge:build-result",
+        payload: JSON.stringify(buildAcceptance(requestId)),
+      },
+    } as never);
+
+    await expect(result).resolves.toMatchObject({ requestId });
   });
 });

@@ -1,19 +1,15 @@
-use std::{collections::HashSet, fs, path::Path, time::Instant};
+use std::time::Instant;
 
-use hashbrown::HashMap;
 use serde::Deserialize;
 use serde_json::{Map, Value};
-use specs::{ReadExpect, System, WriteExpect};
 
 use crate::registry::forge_build_palette;
 use voxelize::{
     BlockRotation, Chunks, ClientFilter, Message, MessageQueues, MessageType, MethodProtocol,
-    Registry, Vec2, Vec3, VoxelAccess, VoxelPacker, World, WorldConfig,
+    Registry, Vec2, Vec3, VoxelPacker, World, WorldConfig,
 };
 
 const MAX_BUILD_WRITES: usize = 10_000;
-const BUILD_BATCH_SIZE: usize = 128;
-const REVISION_FILE: &str = "forge-revision.json";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -80,7 +76,6 @@ struct BuildEnvelope {
 
 #[derive(Clone)]
 struct ResolvedWrite {
-    operation_index: usize,
     position: Vec3<i32>,
     raw: u32,
 }
@@ -102,49 +97,7 @@ impl BuildBounds {
     }
 }
 
-struct BuildJob {
-    request_id: String,
-    client_id: String,
-    requested: usize,
-    writes: Vec<ResolvedWrite>,
-    next: usize,
-    applied: usize,
-    started: Instant,
-    bounds: Option<BuildBounds>,
-    affected_chunks: Vec<Vec2<i32>>,
-    awaiting_commit: Option<(usize, usize, Vec<(Vec3<i32>, u32)>, Instant)>,
-}
-
-pub struct ForgeBuildState {
-    pub revision: u64,
-    active: Option<BuildJob>,
-}
-
-impl ForgeBuildState {
-    pub fn load(config: &WorldConfig) -> Self {
-        let revision = if config.save_dir.is_empty() {
-            0
-        } else {
-            let path = Path::new(&config.save_dir).join(REVISION_FILE);
-            fs::read_to_string(path)
-                .ok()
-                .and_then(|value| serde_json::from_str::<u64>(&value).ok())
-                .unwrap_or(0)
-        };
-        Self {
-            revision,
-            active: None,
-        }
-    }
-}
-
 pub fn setup_forge_world(world: &mut World) {
-    let config = (*world.config()).clone();
-    let state = ForgeBuildState::load(&config);
-    world.ecs_mut().insert(state);
-    world.set_extra_init_data_provider("forgeRevision", |world| {
-        serde_json::json!(current_revision(world))
-    });
     world.set_extra_init_data_provider("forgeBuildPalette", |world| {
         let registry = world.registry();
         serde_json::to_value(
@@ -157,25 +110,38 @@ pub fn setup_forge_world(world: &mut World) {
 }
 
 fn handle_build(world: &mut World, client_id: &str, payload: &str) {
-    let envelope: BuildEnvelope = match serde_json::from_str(payload) {
+    let started = Instant::now();
+    let payload_value: Value = match serde_json::from_str(payload) {
+        Ok(payload_value) => payload_value,
+        Err(error) => {
+            send_result(
+                world,
+                client_id,
+                invalid_response(
+                    "",
+                    0,
+                    "invalid_build_request",
+                    &error.to_string(),
+                    started.elapsed().as_millis(),
+                ),
+            );
+            return;
+        }
+    };
+    let (payload_request_id, payload_requested) = request_metadata(&payload_value);
+    let envelope: BuildEnvelope = match serde_json::from_value(payload_value) {
         Ok(envelope) => envelope,
         Err(error) => {
             send_result(
                 world,
                 client_id,
-                serde_json::json!({
-                    "ok": false,
-                    "outcome": "invalid",
-                    "requestId": "",
-                    "requested": 0,
-                    "expanded": 0,
-                    "applied": 0,
-                    "bounds": Value::Null,
-                    "elapsedMs": 0,
-                    "revision": current_revision(world),
-                    "persistence": "not_started",
-                    "error": { "code": "invalid_build_request", "message": error.to_string() },
-                }),
+                invalid_response(
+                    &payload_request_id,
+                    payload_requested,
+                    "invalid_build_request",
+                    &error.to_string(),
+                    started.elapsed().as_millis(),
+                ),
             );
             return;
         }
@@ -185,72 +151,53 @@ fn handle_build(world: &mut World, client_id: &str, payload: &str) {
         send_result(
             world,
             client_id,
-            failure_receipt(
+            invalid_response(
                 &envelope.request_id,
-                current_revision(world),
+                requested_count(&envelope.request),
                 "invalid_build_request",
                 "requestId must be a non-empty string no longer than 128 bytes.",
+                started.elapsed().as_millis(),
             ),
         );
         return;
     }
 
-    if world.read_resource::<ForgeBuildState>().active.is_some() {
-        send_result(
-            world,
-            client_id,
-            serde_json::json!({
-                "ok": false,
-                "outcome": "busy",
-                "requestId": envelope.request_id,
-                "requested": 0,
-                "expanded": 0,
-                "applied": 0,
-                "bounds": Value::Null,
-                "elapsedMs": 0,
-                "revision": current_revision(world),
-                "persistence": "not_started",
-                "error": { "code": "busy", "message": "Another Forge Build Request is active." },
-            }),
-        );
-        return;
-    }
-
+    let requested = requested_count(&envelope.request);
     let (config, registry) = ((*world.config()).clone(), (*world.registry()).clone());
     let preflight_result = {
         let chunks = world.chunks();
         preflight(&envelope.request, &config, &registry, &chunks)
     };
-    let (writes, affected_chunks, bounds) = match preflight_result {
+    let (writes, bounds) = match preflight_result {
         Ok(result) => result,
         Err(error) => {
             send_result(
                 world,
                 client_id,
-                failure_receipt(
+                invalid_response(
                     &envelope.request_id,
-                    current_revision(world),
+                    requested,
                     "invalid_build_request",
                     &error,
+                    started.elapsed().as_millis(),
                 ),
             );
             return;
         }
     };
 
-    let requested = requested_count(&envelope.request);
-    world.write_resource::<ForgeBuildState>().active = Some(BuildJob {
-        request_id: envelope.request_id,
-        client_id: client_id.to_owned(),
-        requested,
-        writes,
-        next: 0,
-        applied: 0,
-        started: Instant::now(),
-        bounds,
-        affected_chunks,
-        awaiting_commit: None,
-    });
+    submit_resolved_writes(&mut world.chunks_mut(), &writes);
+    send_result(
+        world,
+        client_id,
+        accepted_response(
+            &envelope.request_id,
+            requested,
+            writes.len(),
+            bounds.as_ref(),
+            started.elapsed().as_millis(),
+        ),
+    );
 }
 
 fn preflight(
@@ -258,15 +205,13 @@ fn preflight(
     config: &WorldConfig,
     registry: &Registry,
     chunks: &Chunks,
-) -> Result<(Vec<ResolvedWrite>, Vec<Vec2<i32>>, Option<BuildBounds>), String> {
+) -> Result<(Vec<ResolvedWrite>, Option<BuildBounds>), String> {
     if request.operations.is_empty() {
         return Err("operations must be a non-empty array.".to_owned());
     }
 
     let origin = checked_position(&request.origin, "origin")?;
     let mut writes = Vec::new();
-    let mut affected_chunks = Vec::new();
-    let mut affected_seen = HashSet::new();
     let mut bounds: Option<BuildBounds> = None;
 
     for (operation_index, operation) in request.operations.iter().enumerate() {
@@ -308,8 +253,6 @@ fn preflight(
                             }
                             append_write(
                                 &mut writes,
-                                &mut affected_chunks,
-                                &mut affected_seen,
                                 &mut bounds,
                                 &origin,
                                 Vec3(
@@ -362,8 +305,6 @@ fn preflight(
                 let block = resolve_block(block, properties, registry)?;
                 append_line(
                     &mut writes,
-                    &mut affected_chunks,
-                    &mut affected_seen,
                     &mut bounds,
                     &origin,
                     from,
@@ -388,8 +329,6 @@ fn preflight(
                     let block = resolve_block(&voxel.block, &voxel.properties, registry)?;
                     append_write(
                         &mut writes,
-                        &mut affected_chunks,
-                        &mut affected_seen,
                         &mut bounds,
                         &origin,
                         at,
@@ -412,7 +351,7 @@ fn preflight(
         ));
     }
 
-    Ok((writes, affected_chunks, bounds))
+    Ok((writes, bounds))
 }
 
 fn checked_position(position: &Position, label: &str) -> Result<Vec3<i32>, String> {
@@ -534,12 +473,10 @@ fn resolve_block(
 #[allow(clippy::too_many_arguments)]
 fn append_write(
     writes: &mut Vec<ResolvedWrite>,
-    affected_chunks: &mut Vec<Vec2<i32>>,
-    affected_seen: &mut HashSet<Vec2<i32>>,
     bounds: &mut Option<BuildBounds>,
     origin: &Vec3<i32>,
     relative: Vec3<i32>,
-    operation_index: usize,
+    _operation_index: usize,
     raw: u32,
     config: &WorldConfig,
     chunks: &Chunks,
@@ -584,9 +521,6 @@ fn append_write(
             ));
         }
     }
-    if affected_seen.insert(chunk.clone()) {
-        affected_chunks.push(chunk);
-    }
     if let Some(current) = bounds {
         current.include(&position);
     } else {
@@ -595,11 +529,7 @@ fn append_write(
             max: position.clone(),
         });
     }
-    writes.push(ResolvedWrite {
-        operation_index,
-        position,
-        raw,
-    });
+    writes.push(ResolvedWrite { position, raw });
     Ok(())
 }
 
@@ -608,8 +538,6 @@ fn append_write(
 #[allow(clippy::too_many_arguments)]
 fn append_line(
     writes: &mut Vec<ResolvedWrite>,
-    affected_chunks: &mut Vec<Vec2<i32>>,
-    affected_seen: &mut HashSet<Vec2<i32>>,
     bounds: &mut Option<BuildBounds>,
     origin: &Vec3<i32>,
     from: Vec3<i32>,
@@ -631,8 +559,6 @@ fn append_line(
     let mut append = |x: i32, y: i32, z: i32| {
         append_write(
             writes,
-            affected_chunks,
-            affected_seen,
             bounds,
             origin,
             Vec3(x, y, z),
@@ -698,26 +624,33 @@ fn append_line(
     Ok(())
 }
 
+fn requested_count(request: &BuildRequest) -> usize {
+    request.operations.len()
+}
+
+fn request_metadata(payload: &Value) -> (String, usize) {
+    let Some(payload) = payload.as_object() else {
+        return (String::new(), 0);
+    };
+    let request_id = payload
+        .get("requestId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let requested = payload
+        .get("request")
+        .and_then(Value::as_object)
+        .and_then(|request| request.get("operations"))
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    (request_id, requested)
+}
+
 fn voxel_chunk(position: &Vec3<i32>, chunk_size: usize) -> Vec2<i32> {
     Vec2(
         position.0.div_euclid(chunk_size as i32),
         position.2.div_euclid(chunk_size as i32),
     )
-}
-
-fn requested_count(request: &BuildRequest) -> usize {
-    request
-        .operations
-        .iter()
-        .map(|operation| match operation {
-            BuildOperation::Voxels { blocks } => blocks.len(),
-            _ => 1,
-        })
-        .sum()
-}
-
-fn current_revision(world: &World) -> u64 {
-    world.read_resource::<ForgeBuildState>().revision
 }
 
 fn send_result(world: &mut World, client_id: &str, payload: Value) {
@@ -732,175 +665,12 @@ fn send_result(world: &mut World, client_id: &str, payload: Value) {
     ));
 }
 
-fn send_progress(world: &mut MessageQueues, client_id: &str, payload: Value) {
-    world.push((
-        Message::new(&MessageType::Method)
-            .method(MethodProtocol {
-                name: "forge:build-progress".to_owned(),
-                payload: payload.to_string(),
-            })
-            .build(),
-        ClientFilter::Direct(client_id.to_owned()),
-    ));
-}
-
-fn send_revision(world: &mut MessageQueues, revision: u64) {
-    world.push((
-        Message::new(&MessageType::Method)
-            .method(MethodProtocol {
-                name: "forge:revision".to_owned(),
-                payload: serde_json::json!({ "revision": revision }).to_string(),
-            })
-            .build(),
-        ClientFilter::All,
-    ));
-}
-
-fn failure_receipt(request_id: &str, revision: u64, code: &str, message: &str) -> Value {
-    serde_json::json!({
-        "ok": false,
-        "outcome": "invalid",
-        "requestId": request_id,
-        "requested": 0,
-        "expanded": 0,
-        "applied": 0,
-        "bounds": Value::Null,
-        "elapsedMs": 0,
-        "revision": revision,
-        "persistence": "not_started",
-        "error": { "code": code, "message": message },
-    })
-}
-
-pub struct ForgeBuildSystem;
-
-impl<'a> System<'a> for ForgeBuildSystem {
-    type SystemData = (
-        Option<WriteExpect<'a, ForgeBuildState>>,
-        ReadExpect<'a, WorldConfig>,
-        WriteExpect<'a, Chunks>,
-        WriteExpect<'a, MessageQueues>,
-    );
-
-    fn run(&mut self, data: Self::SystemData) {
-        let (Some(mut state), config, mut chunks, mut messages) = data else {
-            return;
-        };
-        let Some(mut job) = state.active.take() else {
-            return;
-        };
-
-        if let Some((start, end, expected, queued_at)) = job.awaiting_commit.take() {
-            if queued_at.elapsed().as_secs() >= 5 {
-                let failed = job.writes.get(start);
-                let receipt = serde_json::json!({
-                    "ok": false,
-                    "outcome": "partial_failure",
-                    "requestId": job.request_id,
-                    "requested": job.requested,
-                    "expanded": job.writes.len(),
-                    "applied": job.applied,
-                    "bounds": bounds_value(bounds_for_applied(&job).as_ref()),
-                    "elapsedMs": job.started.elapsed().as_millis(),
-                    "revision": state.revision,
-                    "persistence": "not_reached",
-                    "error": {
-                        "code": "runtime_mutation_timeout",
-                        "message": "The authoritative chunk mutation did not commit within the server bound.",
-                        "operationIndex": failed.map(|write| write.operation_index),
-                        "position": failed.map(|write| serde_json::json!({
-                            "x": write.position.0,
-                            "y": write.position.1,
-                            "z": write.position.2,
-                        })),
-                    },
-                });
-                let client_id = job.client_id.clone();
-                send_queued_result(&mut messages, &client_id, receipt);
-                return;
-            }
-            let committed = expected.iter().all(|(position, raw)| {
-                chunks.get_raw_voxel(position.0, position.1, position.2) == *raw
-            });
-            if !committed {
-                job.awaiting_commit = Some((start, end, expected, queued_at));
-                state.active = Some(job);
-                return;
-            }
-
-            job.applied = end;
-            let mut persistence_error = None;
-            for coords in &job.affected_chunks {
-                if !chunks.save(coords) {
-                    persistence_error = Some(format!("failed to persist chunk {:?}", coords));
-                    break;
-                }
-            }
-            state.revision = state.revision.saturating_add(1);
-            if let Err(error) = persist_revision(&config.save_dir, state.revision) {
-                persistence_error = Some(error);
-            }
-            send_revision(&mut messages, state.revision);
-            send_progress(
-                &mut messages,
-                &job.client_id,
-                serde_json::json!({
-                    "requestId": job.request_id,
-                    "applied": job.applied,
-                    "total": job.writes.len(),
-                    "revision": state.revision,
-                }),
-            );
-
-            if job.applied == job.writes.len() || persistence_error.is_some() {
-                let receipt = receipt_for_job(&job, state.revision, persistence_error);
-                let client_id = job.client_id.clone();
-                send_queued_result(&mut messages, &client_id, receipt);
-                return;
-            }
-        }
-
-        if job.next >= job.writes.len() {
-            state.active = Some(job);
-            return;
-        }
-        let start = job.next;
-        let end = (start + BUILD_BATCH_SIZE).min(job.writes.len());
-        chunks.update_voxels(
-            &job.writes[start..end]
-                .iter()
-                .map(|write| (write.position.clone(), write.raw))
-                .collect::<Vec<_>>(),
-        );
-        let mut expected = HashMap::new();
-        for write in &job.writes[start..end] {
-            expected.insert(write.position.clone(), write.raw);
-        }
-        job.next = end;
-        job.awaiting_commit = Some((start, end, expected.into_iter().collect(), Instant::now()));
-        send_progress(
-            &mut messages,
-            &job.client_id,
-            serde_json::json!({
-                "requestId": job.request_id,
-                "applied": job.applied,
-                "total": job.writes.len(),
-                "revision": state.revision,
-            }),
-        );
-        state.active = Some(job);
-    }
-}
-
-fn persist_revision(save_dir: &str, revision: u64) -> Result<(), String> {
-    if save_dir.is_empty() {
-        return Err("Forge World saving is not configured.".to_owned());
-    }
-    let path = Path::new(save_dir).join(REVISION_FILE);
-    fs::create_dir_all(Path::new(save_dir))
-        .map_err(|error| format!("failed to create Forge save directory: {error}"))?;
-    fs::write(path, serde_json::to_vec(&revision).unwrap())
-        .map_err(|error| format!("failed to persist Forge revision: {error}"))
+fn submit_resolved_writes(chunks: &mut Chunks, writes: &[ResolvedWrite]) {
+    let updates: Vec<_> = writes
+        .iter()
+        .map(|write| (write.position.clone(), write.raw))
+        .collect();
+    chunks.update_voxels(&updates);
 }
 
 fn bounds_value(bounds: Option<&BuildBounds>) -> Value {
@@ -913,71 +683,311 @@ fn bounds_value(bounds: Option<&BuildBounds>) -> Value {
     }
 }
 
-fn bounds_for_applied(job: &BuildJob) -> Option<BuildBounds> {
-    let mut bounds: Option<BuildBounds> = None;
-    for write in job.writes.iter().take(job.applied) {
-        if let Some(current) = &mut bounds {
-            current.include(&write.position);
-        } else {
-            bounds = Some(BuildBounds {
-                min: write.position.clone(),
-                max: write.position.clone(),
-            });
-        }
-    }
-    bounds
-}
-
-fn receipt_for_job(job: &BuildJob, revision: u64, persistence_error: Option<String>) -> Value {
-    let ok = persistence_error.is_none() && job.applied == job.writes.len();
-    let error = persistence_error.map(|message| {
-        let failed = job.writes.get(job.applied.saturating_sub(1));
-        serde_json::json!({
-            "code": "persistence_failed",
-            "message": message,
-            "operationIndex": failed.map(|write| write.operation_index),
-            "position": failed.map(|write| serde_json::json!({
-                "x": write.position.0,
-                "y": write.position.1,
-                "z": write.position.2,
-            })),
-        })
-    });
+fn accepted_response(
+    request_id: &str,
+    requested: usize,
+    expanded: usize,
+    bounds: Option<&BuildBounds>,
+    elapsed_ms: u128,
+) -> Value {
     serde_json::json!({
-        "ok": ok,
-        "outcome": if ok { "success" } else { "partial_failure" },
-        "requestId": job.request_id,
-        "requested": job.requested,
-        "expanded": job.writes.len(),
-        "applied": job.applied,
-        "bounds": bounds_value(bounds_for_applied(job).as_ref()),
-        "elapsedMs": job.started.elapsed().as_millis(),
-        "revision": revision,
-        "persistence": if ok { "saved" } else { "failed" },
-        "error": error,
+        "ok": true,
+        "outcome": "accepted",
+        "requestId": request_id,
+        "requested": requested,
+        "expanded": expanded,
+        "submitted": expanded,
+        "bounds": bounds_value(bounds),
+        "elapsedMs": elapsed_ms,
     })
 }
 
-// The helper keeps the final direct-send call visually parallel to the
-// existing `World::send`/`MessageQueues` code while the build system owns the
-// queue borrow for the remainder of the tick.
-fn send_queued_result(queue: &mut MessageQueues, client_id: &str, payload: Value) {
-    queue.push((
-        Message::new(&MessageType::Method)
-            .method(MethodProtocol {
-                name: "forge:build-result".to_owned(),
-                payload: payload.to_string(),
-            })
-            .build(),
-        ClientFilter::Direct(client_id.to_owned()),
-    ));
+fn invalid_response(
+    request_id: &str,
+    requested: usize,
+    code: &str,
+    message: &str,
+    elapsed_ms: u128,
+) -> Value {
+    serde_json::json!({
+        "ok": false,
+        "outcome": "invalid",
+        "requestId": request_id,
+        "requested": requested,
+        "expanded": 0,
+        "submitted": 0,
+        "bounds": Value::Null,
+        "elapsedMs": elapsed_ms,
+        "error": { "code": code, "message": message },
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use serde_json::{Map, Value};
 
-    use super::{resolve_block, BlockRotation, VoxelPacker};
+    use super::{
+        accepted_response, handle_build, invalid_response, requested_count, resolve_block,
+        submit_resolved_writes, BlockRotation, BuildBounds, BuildEnvelope, BuildOperation,
+        BuildRequest, BuildVoxel, Position, ResolvedWrite, VoxelPacker,
+    };
+
+    fn ready_world() -> voxelize::World {
+        let config = voxelize::WorldConfig::new()
+            .min_chunk([0, 0])
+            .max_chunk([0, 0])
+            .chunk_size(16)
+            .max_height(64)
+            .build();
+        let mut world = voxelize::World::new("forge-test", &config);
+        world.ecs_mut().insert(crate::registry::setup_registry());
+
+        let mut chunk = voxelize::Chunk::new(
+            "0,0",
+            0,
+            0,
+            &voxelize::ChunkOptions {
+                size: 16,
+                max_height: 64,
+                sub_chunks: 1,
+            },
+        );
+        chunk.status = voxelize::ChunkStatus::Ready;
+        world.chunks_mut().add(chunk);
+        world
+    }
+
+    fn queued_response(world: &mut voxelize::World) -> Value {
+        let messages = world
+            .write_resource::<voxelize::MessageQueues>()
+            .drain_prioritized();
+        let message = messages
+            .into_iter()
+            .next()
+            .expect("Forge handler must queue one direct response")
+            .0;
+        let method = message
+            .method
+            .expect("Forge response must be a method message");
+        serde_json::from_str(&method.payload).expect("Forge response must be JSON")
+    }
+
+    #[test]
+    fn handle_build_accepts_two_clients_in_actor_order_and_queues_correlated_results() {
+        let mut world = ready_world();
+        let first = serde_json::json!({
+            "requestId": "forge-a",
+            "request": {
+                "origin": { "x": 1, "y": 50, "z": 1 },
+                "operations": [{
+                    "type": "voxels",
+                    "blocks": [{ "at": { "x": 0, "y": 0, "z": 0 }, "block": "Glass" }]
+                }]
+            }
+        });
+        let second = serde_json::json!({
+            "requestId": "forge-b",
+            "request": {
+                "origin": { "x": 1, "y": 50, "z": 1 },
+                "operations": [{
+                    "type": "voxels",
+                    "blocks": [
+                        { "at": { "x": 0, "y": 0, "z": 0 }, "block": "Oak Log" },
+                        { "at": { "x": 1, "y": 0, "z": 0 }, "block": "Oak Log" }
+                    ]
+                }]
+            }
+        });
+
+        handle_build(&mut world, "client-a", &first.to_string());
+        let first_response = queued_response(&mut world);
+        handle_build(&mut world, "client-b", &second.to_string());
+        let second_response = queued_response(&mut world);
+
+        assert_eq!(first_response["outcome"], "accepted");
+        assert_eq!(first_response["requestId"], "forge-a");
+        assert_eq!(first_response["requested"], 1);
+        assert_eq!(first_response["expanded"], 1);
+        assert_eq!(first_response["submitted"], 1);
+        assert_eq!(second_response["outcome"], "accepted");
+        assert_eq!(second_response["requestId"], "forge-b");
+
+        assert_eq!(
+            world
+                .chunks()
+                .pending_updates_in_bounds(&voxelize::Vec3(1, 50, 1), &voxelize::Vec3(2, 50, 1),),
+            hashbrown::HashMap::from_iter([
+                (voxelize::Vec3(1, 50, 1), 43),
+                (voxelize::Vec3(2, 50, 1), 43),
+            ])
+        );
+    }
+
+    #[test]
+    fn handle_build_invalid_requests_do_not_submit_partial_writes() {
+        let mut world = ready_world();
+        let payload = serde_json::json!({
+            "requestId": "forge-invalid",
+            "request": {
+                "origin": { "x": 1, "y": 50, "z": 1 },
+                "operations": [{
+                    "type": "voxels",
+                    "blocks": [
+                        { "at": { "x": 0, "y": 0, "z": 0 }, "block": "Glass" },
+                        { "at": { "x": 1, "y": 0, "z": 0 }, "block": "Water" }
+                    ]
+                }]
+            }
+        });
+
+        handle_build(&mut world, "client-a", &payload.to_string());
+        let response = queued_response(&mut world);
+
+        assert_eq!(response["ok"], false);
+        assert_eq!(response["outcome"], "invalid");
+        assert_eq!(response["requestId"], "forge-invalid");
+        assert_eq!(response["submitted"], 0);
+        assert_eq!(world.chunks().pending_updates_count(), 0);
+    }
+
+    #[test]
+    fn accepted_requests_share_the_authoritative_last_write_wins_projection() {
+        let mut chunks = voxelize::Chunks::new(&voxelize::WorldConfig::new().build());
+        let first = vec![
+            ResolvedWrite {
+                position: voxelize::Vec3(1, 50, 1),
+                raw: 11,
+            },
+            ResolvedWrite {
+                position: voxelize::Vec3(2, 50, 1),
+                raw: 11,
+            },
+        ];
+        let second = vec![
+            ResolvedWrite {
+                position: voxelize::Vec3(2, 50, 1),
+                raw: 22,
+            },
+            ResolvedWrite {
+                position: voxelize::Vec3(3, 50, 1),
+                raw: 22,
+            },
+        ];
+
+        submit_resolved_writes(&mut chunks, &first);
+        submit_resolved_writes(&mut chunks, &second);
+
+        assert_eq!(
+            chunks.pending_updates_in_bounds(&voxelize::Vec3(1, 50, 1), &voxelize::Vec3(3, 50, 1),),
+            hashbrown::HashMap::from_iter([
+                (voxelize::Vec3(1, 50, 1), 11),
+                (voxelize::Vec3(2, 50, 1), 22),
+                (voxelize::Vec3(3, 50, 1), 22),
+            ])
+        );
+    }
+
+    #[test]
+    fn the_expansion_limit_accepts_10000_and_rejects_10001_writes() {
+        assert_eq!(
+            super::checked_shape_count(&voxelize::Vec3(10_000, 1, 1), false),
+            Ok(10_000)
+        );
+        assert!(super::checked_shape_count(&voxelize::Vec3(10_001, 1, 1), false).is_err());
+    }
+
+    #[test]
+    fn accepted_response_is_the_exact_build_acceptance_contract() {
+        let bounds = BuildBounds {
+            min: voxelize::Vec3(10, 4, 20),
+            max: voxelize::Vec3(29, 15, 39),
+        };
+
+        assert_eq!(
+            accepted_response("forge-123", 3, 480, Some(&bounds), 7),
+            serde_json::json!({
+                "ok": true,
+                "outcome": "accepted",
+                "requestId": "forge-123",
+                "requested": 3,
+                "expanded": 480,
+                "submitted": 480,
+                "bounds": {
+                    "min": { "x": 10, "y": 4, "z": 20 },
+                    "max": { "x": 29, "y": 15, "z": 39 },
+                },
+                "elapsedMs": 7,
+            })
+        );
+    }
+
+    #[test]
+    fn invalid_response_is_the_exact_non_submitting_contract() {
+        assert_eq!(
+            invalid_response(
+                "forge-123",
+                3,
+                "invalid_build_request",
+                "Build Request expands beyond the 10000-write limit.",
+                2,
+            ),
+            serde_json::json!({
+                "ok": false,
+                "outcome": "invalid",
+                "requestId": "forge-123",
+                "requested": 3,
+                "expanded": 0,
+                "submitted": 0,
+                "bounds": Value::Null,
+                "elapsedMs": 2,
+                "error": {
+                    "code": "invalid_build_request",
+                    "message": "Build Request expands beyond the 10000-write limit.",
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn requested_counts_build_operations_not_individual_voxels() {
+        let request = BuildRequest {
+            origin: Position { x: 0, y: 50, z: 0 },
+            operations: vec![BuildOperation::Voxels {
+                blocks: vec![
+                    BuildVoxel {
+                        at: Position { x: 0, y: 0, z: 0 },
+                        block: "Glass".to_owned(),
+                        properties: Map::new(),
+                    },
+                    BuildVoxel {
+                        at: Position { x: 1, y: 0, z: 0 },
+                        block: "Glass".to_owned(),
+                        properties: Map::new(),
+                    },
+                ],
+            }],
+        };
+
+        assert_eq!(requested_count(&request), 1);
+    }
+
+    #[test]
+    fn malformed_nested_requests_retain_the_outer_request_id() {
+        let payload = serde_json::json!({
+            "requestId": "forge-123",
+            "request": {
+                "origin": { "x": 0, "y": 50, "z": 0 },
+                "operations": [{ "type": "fill", "size": "not-a-position" }],
+            },
+        });
+
+        let (request_id, requested) = super::request_metadata(&payload);
+        let error = serde_json::from_value::<BuildEnvelope>(payload).expect_err("invalid request");
+
+        assert_eq!(request_id, "forge-123");
+        assert_eq!(requested, 1);
+        assert!(error.to_string().contains("invalid type"));
+    }
 
     #[test]
     fn resolve_block_accepts_new_builder_materials_and_rotated_logs() {
