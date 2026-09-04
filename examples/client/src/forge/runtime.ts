@@ -1,5 +1,6 @@
 import { BlockRotation } from "@voxelize/core";
 import type * as VOXELIZE from "@voxelize/core";
+import { z } from "zod/v4";
 
 import type {
   BuildBounds,
@@ -10,6 +11,7 @@ import type {
 } from "./build-language";
 import {
   MAX_BUILD_WRITES,
+  buildRequestSchema,
   expandBuildRequest,
   parseBuildRequest,
 } from "./build-language";
@@ -240,102 +242,13 @@ const propertySnapshot = (block: ForgeBlockInfo): BuildStateProperties => ({
   yRotation: block.yRotation,
 });
 
-const schemaPosition = {
-  type: "object",
-  properties: {
-    x: { type: "integer" },
-    y: { type: "integer" },
-    z: { type: "integer" },
-  },
-  required: ["x", "y", "z"],
-  additionalProperties: false,
-};
+const toDraft7JsonSchema = (schema: z.ZodType) =>
+  z.toJSONSchema(schema, { target: "draft-7" });
 
-const schemaProperties = {
-  type: "object",
-  propertyNames: { minLength: 1 },
-  additionalProperties: {
-    anyOf: [{ type: "string" }, { type: "integer" }, { type: "boolean" }],
-  },
-};
+export const getPlayerContextInputSchema = z.strictObject({});
 
-const blockSchema = (names: string[]) => ({ enum: names });
-
-export const buildStructureInputSchema = (palette: ForgeBuildPalette) => {
-  const names = palette.blocks.map((block) => block.name);
-  const schemaBlock = {
-    type: "object",
-    properties: {
-      at: schemaPosition,
-      block: blockSchema(names),
-      properties: schemaProperties,
-    },
-    required: ["at", "block"],
-    additionalProperties: false,
-  };
-  const schemaOperation = {
-    oneOf: [
-      {
-        type: "object",
-        properties: {
-          type: { const: "fill" },
-          at: schemaPosition,
-          size: schemaPosition,
-          block: blockSchema(names),
-          properties: schemaProperties,
-        },
-        required: ["type", "at", "size", "block"],
-        additionalProperties: false,
-      },
-      {
-        type: "object",
-        properties: {
-          type: { const: "hollow_box" },
-          at: schemaPosition,
-          size: schemaPosition,
-          block: blockSchema(names),
-          properties: schemaProperties,
-        },
-        required: ["type", "at", "size", "block"],
-        additionalProperties: false,
-      },
-      {
-        type: "object",
-        properties: {
-          type: { const: "line" },
-          from: schemaPosition,
-          to: schemaPosition,
-          block: blockSchema(names),
-          properties: schemaProperties,
-        },
-        required: ["type", "from", "to", "block"],
-        additionalProperties: false,
-      },
-      {
-        type: "object",
-        properties: {
-          type: { const: "voxels" },
-          blocks: { type: "array", minItems: 1, items: schemaBlock },
-        },
-        required: ["type", "blocks"],
-        additionalProperties: false,
-      },
-    ],
-  };
-  return {
-    type: "object",
-    properties: {
-      origin: schemaPosition,
-      operations: {
-        type: "array",
-        minItems: 1,
-        items: schemaOperation,
-      },
-    },
-    required: ["origin", "operations"],
-    additionalProperties: false,
-  };
-};
+export const buildStructureInputSchema = (palette: ForgeBuildPalette) =>
+  toDraft7JsonSchema(buildRequestSchema(paletteBlockNames(palette)));
 
 const toolDefinitions = (
   runtime: ForgeRuntime,
@@ -346,12 +259,7 @@ const toolDefinitions = (
     title: "Get Player Context",
     description:
       "Read fresh Player Context from this page: the live player pose and view, current Spatial Target, a fixed 33-by-33 nearby surface map, non-air obstacles above it, canonical Forge block names, and the latest known world revision. The observed region is advisory and does not limit a later Build Request.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-      additionalProperties: false,
-    },
+    inputSchema: toDraft7JsonSchema(getPlayerContextInputSchema),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
