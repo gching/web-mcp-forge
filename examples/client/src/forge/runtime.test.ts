@@ -46,6 +46,56 @@ const expectPlainJson = (value: unknown) => {
   expect(JSON.parse(JSON.stringify(value))).toEqual(value);
 };
 
+const expectSafeIntegerPosition = (value: unknown) => {
+  expect(value).toMatchObject({
+    type: "object",
+    required: ["x", "y", "z"],
+    additionalProperties: false,
+    properties: {
+      x: {
+        type: "integer",
+        minimum: Number.MIN_SAFE_INTEGER,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      y: {
+        type: "integer",
+        minimum: Number.MIN_SAFE_INTEGER,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      z: {
+        type: "integer",
+        minimum: Number.MIN_SAFE_INTEGER,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+    },
+  });
+};
+
+const expectPositiveSafeIntegerPosition = (value: unknown) => {
+  expect(value).toMatchObject({
+    type: "object",
+    required: ["x", "y", "z"],
+    additionalProperties: false,
+    properties: {
+      x: {
+        type: "integer",
+        exclusiveMinimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      y: {
+        type: "integer",
+        exclusiveMinimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      z: {
+        type: "integer",
+        exclusiveMinimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+    },
+  });
+};
+
 describe("ForgeRuntime surface sampling", () => {
   it("reports the highest solid block when a tower stands above the floor", () => {
     vi.stubGlobal("window", { addEventListener: vi.fn() });
@@ -107,14 +157,37 @@ describe("ForgeRuntime Builder Palette contract", () => {
 
   it("describes strict valid-operation payloads", () => {
     const schema = buildStructureInputSchema(builderPalette);
+    const schemaProperties = schema.properties as Record<string, unknown>;
     const operationSchemas = (
       (
-        ((schema.properties as Record<string, unknown>).operations as Record<
+        (schemaProperties.operations as Record<string, unknown>).items as Record<
           string,
           unknown
-        >).items as Record<string, unknown>
-      ).oneOf as Array<Record<string, unknown>>
+        >
+      ).anyOf as Array<Record<string, unknown>>
     );
+    const fillProperties = operationSchemas[0]?.properties as Record<
+      string,
+      unknown
+    >;
+    const hollowBoxProperties = operationSchemas[1]?.properties as Record<
+      string,
+      unknown
+    >;
+    const lineProperties = operationSchemas[2]?.properties as Record<
+      string,
+      unknown
+    >;
+    const voxelsProperties = operationSchemas[3]?.properties as Record<
+      string,
+      unknown
+    >;
+    const voxelItemProperties = (
+      (voxelsProperties.blocks as Record<string, unknown>).items as Record<
+        string,
+        unknown
+      >
+    ).properties as Record<string, unknown>;
 
     expect(operationSchemas).toHaveLength(4);
     expect(operationSchemas.map((entry) => entry.required)).toEqual([
@@ -129,6 +202,14 @@ describe("ForgeRuntime Builder Palette contract", () => {
       false,
       false,
     ]);
+    expectSafeIntegerPosition(schemaProperties.origin);
+    expectSafeIntegerPosition(fillProperties.at);
+    expectPositiveSafeIntegerPosition(fillProperties.size);
+    expectSafeIntegerPosition(hollowBoxProperties.at);
+    expectPositiveSafeIntegerPosition(hollowBoxProperties.size);
+    expectSafeIntegerPosition(lineProperties.from);
+    expectSafeIntegerPosition(lineProperties.to);
+    expectSafeIntegerPosition(voxelItemProperties.at);
     expect(schema).not.toHaveProperty("additionalProperties.properties");
   });
 
