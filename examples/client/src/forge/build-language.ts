@@ -169,6 +169,11 @@ const messageForPosition = (label: string) =>
 const messageForProperties = (label: string) =>
   `${label} must contain only named scalar state properties with safe integer numbers.`;
 
+const messageForPropertiesIssue = (label: string, value: unknown) =>
+  isRecord(value)
+    ? messageForProperties(label)
+    : `${label} must be an object.`;
+
 const sourceOperation = (input: unknown, index: number) => {
   if (!isRecord(input) || !Array.isArray(input.operations)) return undefined;
   return input.operations[index];
@@ -248,7 +253,10 @@ const mapBuildRequestIssue = (
   }
 
   if (field === "properties") {
-    return messageForProperties(`Operation ${operationIndex}.properties`);
+    return messageForPropertiesIssue(
+      `Operation ${operationIndex}.properties`,
+      isRecord(operation) ? operation.properties : undefined,
+    );
   }
 
   if (field === "blocks" && typeof nestedIndex !== "number") {
@@ -261,8 +269,13 @@ const mapBuildRequestIssue = (
     }
 
     if (nestedField === "properties") {
-      return messageForProperties(
+      const voxel =
+        isRecord(operation) && Array.isArray(operation.blocks)
+          ? operation.blocks[nestedIndex]
+          : undefined;
+      return messageForPropertiesIssue(
         `Operation ${operationIndex}.blocks[${String(nestedIndex)}].properties`,
+        isRecord(voxel) ? voxel.properties : undefined,
       );
     }
 

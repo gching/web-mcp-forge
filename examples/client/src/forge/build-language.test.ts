@@ -260,6 +260,58 @@ describe("build-language Forge build request contracts", () => {
               at: { x: 0, y: 0, z: 0 },
               size: { x: 1, y: 1, z: 1 },
               block: "Glass",
+              properties: null,
+            },
+          ],
+        },
+        allowedBlocks,
+      ),
+    ).toEqual({
+      ok: false,
+      error: {
+        code: "invalid_build_request",
+        message: "Operation 0.properties must be an object.",
+      },
+    });
+
+    const prototypeSwizzledProperties = {
+      __proto__: { polluted: true },
+    };
+    expect(
+      buildLanguage.parseBuildRequest(
+        {
+          origin: { x: 0, y: 50, z: 0 },
+          operations: [
+            {
+              type: "fill",
+              at: { x: 0, y: 0, z: 0 },
+              size: { x: 1, y: 1, z: 1 },
+              block: "Glass",
+              properties: prototypeSwizzledProperties,
+            },
+          ],
+        },
+        allowedBlocks,
+      ),
+    ).toEqual({
+      ok: false,
+      error: {
+        code: "invalid_build_request",
+        message:
+          "Operation 0.properties must contain only named scalar state properties with safe integer numbers.",
+      },
+    });
+
+    expect(
+      buildLanguage.parseBuildRequest(
+        {
+          origin: { x: 0, y: 50, z: 0 },
+          operations: [
+            {
+              type: "fill",
+              at: { x: 0, y: 0, z: 0 },
+              size: { x: 1, y: 1, z: 1 },
+              block: "Glass",
               properties: { constructor: "stone" },
             },
           ],
