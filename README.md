@@ -1,5 +1,7 @@
 # Forge
 
+<img width="1200" height="600" alt="forge-img" src="https://github.com/user-attachments/assets/813b5026-4236-4ef3-92b0-0e0abcaea745" />
+
 Forge is a browser-based voxel world where people can explore, point at a location, and ask ChatGPT to build what they imagine.
 
 Using WebMCP, ChatGPT can understand the player's position, target, and nearby terrain, then construct and modify structures directly in the live world.
