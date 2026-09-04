@@ -41,6 +41,10 @@ const collectBlockEnums = (value: unknown): string[][] => {
   return [...direct, ...Object.values(value).flatMap(collectBlockEnums)];
 };
 
+const expectPlainJson = (value: unknown) => {
+  expect(JSON.parse(JSON.stringify(value))).toEqual(value);
+};
+
 describe("ForgeRuntime surface sampling", () => {
   it("reports the highest solid block when a tower stands above the floor", () => {
     vi.stubGlobal("window", { addEventListener: vi.fn() });
@@ -76,12 +80,66 @@ describe("ForgeRuntime surface sampling", () => {
 });
 
 describe("ForgeRuntime Builder Palette contract", () => {
-  it("generates every build_structure block enum from join metadata", () => {
-    const names = builderPalette.blocks.map((block) => block.name);
+  it("generates strict JSON-serializable build_structure schemas with palette names in server order", () => {
+    const names = ["Air", "Glass", "Oak Log"];
+    const schema = buildStructureInputSchema(builderPalette);
 
-    expect(
-      collectBlockEnums(buildStructureInputSchema(builderPalette)),
-    ).toEqual([names, names, names, names]);
+    expect(collectBlockEnums(schema)).toEqual([names, names, names, names]);
+    expect(schema).toMatchObject({
+      type: "object",
+      required: ["origin", "operations"],
+      additionalProperties: false,
+      properties: {
+        origin: {
+          type: "object",
+          required: ["x", "y", "z"],
+          additionalProperties: false,
+        },
+        operations: {
+          type: "array",
+          minItems: 1,
+        },
+      },
+    });
+    expectPlainJson(schema);
+  });
+
+  it("describes strict valid-operation payloads and strict empty get_player_context input", () => {
+    const schema = buildStructureInputSchema(builderPalette);
+    const operationSchemas = (
+      (
+        ((schema.properties as Record<string, unknown>).operations as Record<
+          string,
+          unknown
+        >).items as Record<string, unknown>
+      ).oneOf as Array<Record<string, unknown>>
+    );
+
+    expect(operationSchemas).toHaveLength(4);
+    expect(operationSchemas.map((entry) => entry.required)).toEqual([
+      ["type", "at", "size", "block"],
+      ["type", "at", "size", "block"],
+      ["type", "from", "to", "block"],
+      ["type", "blocks"],
+    ]);
+    expect(operationSchemas.map((entry) => entry.additionalProperties)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(schema).not.toHaveProperty("additionalProperties.properties");
+    expect({
+      type: "object",
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    }).toEqual({
+      type: "object",
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    });
   });
 
   it("rejects malformed metadata before registering either WebMCP tool", async () => {
@@ -102,6 +160,53 @@ describe("ForgeRuntime Builder Palette contract", () => {
         options: { chunkSize: 16 },
         getChunkByCoords: () => ({ isReady: true }),
         getBlockByName: () => undefined,
+      } as never,
+      { position: { x: 0, y: 50, z: 0 } } as never,
+      {} as never,
+      { agentMode: false },
+    );
+
+    runtime.markTextureReadinessComplete();
+
+    await expect(runtime.registerWhenReady(1)).resolves.toBe(false);
+    expect(registerTool).not.toHaveBeenCalled();
+  });
+
+  it("keeps tools unavailable when palette registration uses malformed capability keys", async () => {
+    const registerTool = vi.fn();
+    vi.stubGlobal("window", { addEventListener: vi.fn() });
+    vi.stubGlobal("document", { modelContext: { registerTool } });
+    const runtime = new ForgeRuntime(
+      {
+        connected: true,
+        joined: true,
+        isJoinPending: false,
+        isClientOutdated: false,
+        joinGeneration: 0,
+      } as never,
+      {
+        isInitialized: true,
+        extraInitData: {
+          forgeRevision: 3,
+          forgeBuildPalette: {
+            blocks: [
+              {
+                id: 160,
+                name: "Glass",
+                category: "detail",
+                capabilities: {
+                  stage: true,
+                  rotation: false,
+                  y_rotation: false,
+                },
+              },
+            ],
+          },
+        },
+        options: { chunkSize: 16 },
+        getChunkByCoords: () => ({ isReady: true }),
+        getBlockByName: (name: string) =>
+          name === "Glass" ? { id: 160, name: "Glass" } : undefined,
       } as never,
       { position: { x: 0, y: 50, z: 0 } } as never,
       {} as never,
