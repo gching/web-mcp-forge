@@ -298,21 +298,23 @@ describe("build-language Forge build request contracts", () => {
     });
   });
 
-  it("exposes a strict buildRequestSchema contract for deterministic safeParse behavior", () => {
+  it("exposes a palette-parameterized buildRequestSchema factory for deterministic safeParse behavior", () => {
     expect(buildLanguage.buildRequestSchema).toBeDefined();
 
-    const schemaResult = buildLanguage.buildRequestSchema.safeParse({
-      origin: { x: 0, y: 50, z: 0 },
-      operations: [
-        {
-          type: "fill",
-          at: { x: 0, y: 0, z: 0 },
-          size: { x: 1, y: 1, z: 1 },
-          block: "Glass",
-          extra: true,
-        },
-      ],
-    });
+    const schemaResult = buildLanguage.buildRequestSchema(allowedBlocks).safeParse(
+      {
+        origin: { x: 0, y: 50, z: 0 },
+        operations: [
+          {
+            type: "fill",
+            at: { x: 0, y: 0, z: 0 },
+            size: { x: 1, y: 1, z: 1 },
+            block: "Glass",
+            extra: true,
+          },
+        ],
+      },
+    );
 
     expect(schemaResult.success).toBe(false);
   });
