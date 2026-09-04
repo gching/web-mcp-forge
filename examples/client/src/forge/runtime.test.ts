@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BlockRotation } from "@voxelize/core";
 
 import type { ForgeBuildPalette } from "./palette";
+import * as runtimeModule from "./runtime";
 import { buildStructureInputSchema, ForgeRuntime } from "./runtime";
 
 const builderPalette: ForgeBuildPalette = {
@@ -41,6 +42,60 @@ const collectBlockEnums = (value: unknown): string[][] => {
   return [...direct, ...Object.values(value).flatMap(collectBlockEnums)];
 };
 
+const expectPlainJson = (value: unknown) => {
+  expect(JSON.parse(JSON.stringify(value))).toEqual(value);
+};
+
+const expectSafeIntegerPosition = (value: unknown) => {
+  expect(value).toMatchObject({
+    type: "object",
+    required: ["x", "y", "z"],
+    additionalProperties: false,
+    properties: {
+      x: {
+        type: "integer",
+        minimum: Number.MIN_SAFE_INTEGER,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      y: {
+        type: "integer",
+        minimum: Number.MIN_SAFE_INTEGER,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      z: {
+        type: "integer",
+        minimum: Number.MIN_SAFE_INTEGER,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+    },
+  });
+};
+
+const expectPositiveSafeIntegerPosition = (value: unknown) => {
+  expect(value).toMatchObject({
+    type: "object",
+    required: ["x", "y", "z"],
+    additionalProperties: false,
+    properties: {
+      x: {
+        type: "integer",
+        exclusiveMinimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      y: {
+        type: "integer",
+        exclusiveMinimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+      z: {
+        type: "integer",
+        exclusiveMinimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+      },
+    },
+  });
+};
+
 describe("ForgeRuntime surface sampling", () => {
   it("reports the highest solid block when a tower stands above the floor", () => {
     vi.stubGlobal("window", { addEventListener: vi.fn() });
@@ -76,12 +131,97 @@ describe("ForgeRuntime surface sampling", () => {
 });
 
 describe("ForgeRuntime Builder Palette contract", () => {
-  it("generates every build_structure block enum from join metadata", () => {
-    const names = builderPalette.blocks.map((block) => block.name);
+  it("generates strict JSON-serializable build_structure schemas with palette names in server order", () => {
+    const names = ["Air", "Glass", "Oak Log"];
+    const schema = buildStructureInputSchema(builderPalette);
 
+    expect(collectBlockEnums(schema)).toEqual([names, names, names, names]);
+    expect(schema).toMatchObject({
+      type: "object",
+      required: ["origin", "operations"],
+      additionalProperties: false,
+      properties: {
+        origin: {
+          type: "object",
+          required: ["x", "y", "z"],
+          additionalProperties: false,
+        },
+        operations: {
+          type: "array",
+          minItems: 1,
+        },
+      },
+    });
+    expectPlainJson(schema);
+  });
+
+  it("describes strict valid-operation payloads", () => {
+    const schema = buildStructureInputSchema(builderPalette);
+    const schemaProperties = schema.properties as Record<string, unknown>;
+    const operationSchemas = (
+      (
+        (schemaProperties.operations as Record<string, unknown>).items as Record<
+          string,
+          unknown
+        >
+      ).anyOf as Array<Record<string, unknown>>
+    );
+    const fillProperties = operationSchemas[0]?.properties as Record<
+      string,
+      unknown
+    >;
+    const hollowBoxProperties = operationSchemas[1]?.properties as Record<
+      string,
+      unknown
+    >;
+    const lineProperties = operationSchemas[2]?.properties as Record<
+      string,
+      unknown
+    >;
+    const voxelsProperties = operationSchemas[3]?.properties as Record<
+      string,
+      unknown
+    >;
+    const voxelItemProperties = (
+      (voxelsProperties.blocks as Record<string, unknown>).items as Record<
+        string,
+        unknown
+      >
+    ).properties as Record<string, unknown>;
+
+    expect(operationSchemas).toHaveLength(4);
+    expect(operationSchemas.map((entry) => entry.required)).toEqual([
+      ["type", "at", "size", "block"],
+      ["type", "at", "size", "block"],
+      ["type", "from", "to", "block"],
+      ["type", "blocks"],
+    ]);
+    expect(operationSchemas.map((entry) => entry.additionalProperties)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expectSafeIntegerPosition(schemaProperties.origin);
+    expectSafeIntegerPosition(fillProperties.at);
+    expectPositiveSafeIntegerPosition(fillProperties.size);
+    expectSafeIntegerPosition(hollowBoxProperties.at);
+    expectPositiveSafeIntegerPosition(hollowBoxProperties.size);
+    expectSafeIntegerPosition(lineProperties.from);
+    expectSafeIntegerPosition(lineProperties.to);
+    expectSafeIntegerPosition(voxelItemProperties.at);
+    expect(schema).not.toHaveProperty("additionalProperties.properties");
+  });
+
+  it("exposes a strict empty get_player_context input schema", () => {
+    expect(runtimeModule.getPlayerContextInputSchema).toBeDefined();
+    expect(runtimeModule.getPlayerContextInputSchema.safeParse({}).success).toBe(
+      true,
+    );
     expect(
-      collectBlockEnums(buildStructureInputSchema(builderPalette)),
-    ).toEqual([names, names, names, names]);
+      runtimeModule.getPlayerContextInputSchema.safeParse({ extra: true })
+        .success,
+    ).toBe(false);
   });
 
   it("rejects malformed metadata before registering either WebMCP tool", async () => {
@@ -102,6 +242,53 @@ describe("ForgeRuntime Builder Palette contract", () => {
         options: { chunkSize: 16 },
         getChunkByCoords: () => ({ isReady: true }),
         getBlockByName: () => undefined,
+      } as never,
+      { position: { x: 0, y: 50, z: 0 } } as never,
+      {} as never,
+      { agentMode: false },
+    );
+
+    runtime.markTextureReadinessComplete();
+
+    await expect(runtime.registerWhenReady(1)).resolves.toBe(false);
+    expect(registerTool).not.toHaveBeenCalled();
+  });
+
+  it("keeps tools unavailable when palette registration uses malformed capability keys", async () => {
+    const registerTool = vi.fn();
+    vi.stubGlobal("window", { addEventListener: vi.fn() });
+    vi.stubGlobal("document", { modelContext: { registerTool } });
+    const runtime = new ForgeRuntime(
+      {
+        connected: true,
+        joined: true,
+        isJoinPending: false,
+        isClientOutdated: false,
+        joinGeneration: 0,
+      } as never,
+      {
+        isInitialized: true,
+        extraInitData: {
+          forgeRevision: 3,
+          forgeBuildPalette: {
+            blocks: [
+              {
+                id: 160,
+                name: "Glass",
+                category: "detail",
+                capabilities: {
+                  stage: true,
+                  rotation: false,
+                  y_rotation: false,
+                },
+              },
+            ],
+          },
+        },
+        options: { chunkSize: 16 },
+        getChunkByCoords: () => ({ isReady: true }),
+        getBlockByName: (name: string) =>
+          name === "Glass" ? { id: 160, name: "Glass" } : undefined,
       } as never,
       { position: { x: 0, y: 50, z: 0 } } as never,
       {} as never,

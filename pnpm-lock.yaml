@@ -197,6 +197,9 @@ importers:
       three:
         specifier: ^0.183.0
         version: 0.183.2
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/p5':
         specifier: ^1.7.6
