@@ -9,7 +9,7 @@ The single persistent shared world used by the MVP. It is generated from Voxeliz
 _Avoid_: Demo world, test world, personal world
 
 **Player Context**:
-A fresh server-backed description of the player's position, aim, nearby surface, obstacles, and current world revision. It is advisory context for ChatGPT rather than a boundary on where a later World Mutation may write.
+A fresh server-backed description of the player's position, aim, nearby surface, and obstacles. It is advisory context for ChatGPT rather than a boundary on where a later World Mutation may write.
 _Avoid_: Game state, camera dump, client context
 
 **Spatial Target**:
@@ -24,12 +24,16 @@ _Avoid_: Client edit, renderer update, local placement
 An absolute origin and ordered list of relative `fill`, `hollow_box`, `line`, or `voxels` operations submitted through `build_structure`. Each block name must be present in the current server-authored Builder Palette metadata.
 _Avoid_: Structure Plan, build script, raw edits
 
+**Build Acceptance**:
+The immediate account that a Build Request passed complete preflight and all of its resolved writes were submitted to the authoritative Forge World update pipeline. It makes no claim about application, conflicts, world revision, or persistence.
+_Avoid_: Build Receipt, success receipt, persistence result
+
 **Registry**:
 The server-owned catalog of stable block identities and behavior that is sent to clients when they join the Forge World.
 _Avoid_: Texture list, client registry, asset manifest
 
 **Builder Palette**:
-The ordered 27-block mutation set derived by the Rust Registry and published as validated `forgeBuildPalette` join metadata beside `forgeRevision`. It contains utility `Air`; terrain `Dirt`, `Grass Block`, `Grass`, `Sand`, `Snow`; stone `Stone`, `Granite`, `Graphite`, `Marble`; wood `Oak Planks`, `Oak Slab Top`, `Oak Slab Bottom`, `Oak Log`, `Oak Leaves`, `Birch Log`; detail `Glass`, `Ivory Block`; color `White Concrete`, `Black Concrete`, `Red Concrete`, `Blue Concrete`, `Yellow Concrete`, `Orange Concrete`; and lighting `Torch`, `Ember Lamp`, `Azure Lamp`. Each entry has a canonical ID, category, and `stage`, `rotation`, and `yRotation` capabilities. Missing, malformed, empty, duplicated, or browser-Registry-unknown metadata leaves Forge WebMCP unavailable.
+The ordered 27-block mutation set derived by the Rust Registry and published as validated `forgeBuildPalette` join metadata. It contains utility `Air`; terrain `Dirt`, `Grass Block`, `Grass`, `Sand`, `Snow`; stone `Stone`, `Granite`, `Graphite`, `Marble`; wood `Oak Planks`, `Oak Slab Top`, `Oak Slab Bottom`, `Oak Log`, `Oak Leaves`, `Birch Log`; detail `Glass`, `Ivory Block`; color `White Concrete`, `Black Concrete`, `Red Concrete`, `Blue Concrete`, `Yellow Concrete`, `Orange Concrete`; and lighting `Torch`, `Ember Lamp`, `Azure Lamp`. Each entry has a canonical ID, category, and `stage`, `rotation`, and `yRotation` capabilities. Missing, malformed, empty, duplicated, or browser-Registry-unknown metadata leaves Forge WebMCP unavailable.
 _Avoid_: the previous eight-block mutation whitelist, a full texture pack, a generated client registry, and all demo blocks
 
 **Texture Readiness**:
